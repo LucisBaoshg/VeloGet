@@ -65,7 +65,7 @@ requires = [
     "toga",
     "yt-dlp[default]",
 ]
-description = "VeloGet - 您的极简视频下载器"
+description = "VeloGet - Your Minimalist Video Downloader"
 icon = "src/ytdlpgui/resources/ytdlpgui"
 
 [tool.briefcase.app.ytdlpgui.iOS]
