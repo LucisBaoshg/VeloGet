@@ -13,6 +13,11 @@ class DependencyManager:
         self.config = config_manager
         # ~/.ytdlpgui/bin
         self.bin_dir = self.config.config_dir / "bin"
+        
+        # Bundled bin dir (src/ytdlpgui/_internal)
+        # Assuming this file is in src/ytdlpgui/core/dependency.py
+        self.internal_bin_dir = Path(__file__).parent.parent / "_internal"
+        
         self._ensure_bin_dir()
 
     def _ensure_bin_dir(self):
@@ -24,6 +29,15 @@ class DependencyManager:
         local_ffmpeg = self.bin_dir / "ffmpeg"
         if local_ffmpeg.exists() and os.access(local_ffmpeg, os.X_OK):
             return str(local_ffmpeg)
+            
+        # 1.5 Bundled bin (Windows/Mac packaged)
+        # Check both "ffmpeg" and "ffmpeg.exe"
+        bundled_ffmpeg = self.internal_bin_dir / "ffmpeg"
+        if bundled_ffmpeg.exists():
+             return str(bundled_ffmpeg)
+        bundled_ffmpeg_exe = self.internal_bin_dir / "ffmpeg.exe"
+        if bundled_ffmpeg_exe.exists():
+             return str(bundled_ffmpeg_exe)
         
         # 2. System path (fallback)
         return shutil.which("ffmpeg")

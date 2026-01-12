@@ -21,6 +21,21 @@ jobs:
       run: |
         pip install briefcase toga yt-dlp
 
+    - name: Download FFmpeg for Windows
+      run: |
+        # Download FFmpeg
+        Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile "ffmpeg.zip"
+        # Extract
+        Expand-Archive -Path "ffmpeg.zip" -DestinationPath "ffmpeg_temp"
+        # Create destination dir
+        New-Item -ItemType Directory -Force -Path "src/ytdlpgui/_internal"
+        # Move executables (Find them recursively as the zip structure varies slightly by version)
+        Get-ChildItem -Path "ffmpeg_temp" -Filter "ffmpeg.exe" -Recurse | Copy-Item -Destination "src/ytdlpgui/_internal"
+        Get-ChildItem -Path "ffmpeg_temp" -Filter "ffprobe.exe" -Recurse | Copy-Item -Destination "src/ytdlpgui/_internal"
+        # Cleanup
+        Remove-Item -Path "ffmpeg.zip"
+        Remove-Item -Path "ffmpeg_temp" -Recurse -Force
+
     - name: Build and Package
       run: |
         briefcase build windows

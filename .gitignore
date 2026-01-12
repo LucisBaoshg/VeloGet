@@ -65,3 +65,10 @@ cover/
 # Local App data
 ytdlpgui.icns
 logo.iconset
+
+# Internal Binaries (Bundled at build time)
+src/ytdlpgui/_internal/ffmpeg
+src/ytdlpgui/_internal/yt-dlp
+src/ytdlpgui/_internal/ffmpeg.exe
+src/ytdlpgui/_internal/ffprobe.exe
+src/ytdlpgui/_internal/yt-dlp.exe

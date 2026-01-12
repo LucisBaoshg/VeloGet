@@ -45,7 +45,8 @@ class YtDlpWorker:
         # 2. Inject common system paths (/opt/homebrew/bin ...)
         
         local_bin = str(self.deps.bin_dir)
-        common_paths = [local_bin, "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+        internal_bin = str(self.deps.internal_bin_dir)
+        common_paths = [local_bin, internal_bin, "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]
         current_path = os.environ.get("PATH", "")
         
         new_paths = []
