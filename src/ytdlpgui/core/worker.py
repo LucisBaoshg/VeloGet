@@ -98,6 +98,11 @@ class YtDlpWorker:
                     "status": "error", 
                     "error": "无法读取浏览器 Cookie。\n\n这是 Windows 系统的限制，请尝试：\n1. 【关闭 Chrome 浏览器】后重试\n2. 或者使用 Firefox 浏览器"
                 }
+            if "Failed to decrypt with DPAPI" in err_msg:
+                return {
+                    "status": "error",
+                    "error": "无法解密 Chrome Cookie (DPAPI 错误)。\n\n这通常是因为 Windows 权限隔离导致。\n\n建议方案：\n1. 改用 Firefox 浏览器 (推荐)\n2. 或者尝试不使用 Cookie 下载"
+                }
             return {"status": "error", "error": err_msg}
 
     async def download_video(self, url, format_id, browser, profile, on_log=None, on_progress=None):
@@ -181,5 +186,10 @@ class YtDlpWorker:
                 return {
                     "status": "error", 
                     "error": "无法读取浏览器 Cookie。\n\n这是 Windows 系统的限制，请尝试：\n1. 【关闭 Chrome 浏览器】后重试\n2. 或者使用 Firefox 浏览器"
+                }
+            if "Failed to decrypt with DPAPI" in err_msg:
+                return {
+                    "status": "error",
+                    "error": "无法解密 Chrome Cookie (DPAPI 错误)。\n\n这通常是因为 Windows 权限隔离导致。\n\n建议方案：\n1. 改用 Firefox 浏览器 (推荐)\n2. 或者尝试不使用 Cookie 下载"
                 }
             return {"status": "error", "error": str(e)}

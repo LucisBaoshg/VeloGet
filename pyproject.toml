@@ -64,6 +64,7 @@ supported = false
 requires = [
     "toga",
     "yt-dlp[default]",
+    "pycryptodomex",
 ]
 description = "VeloGet - Your Minimalist Video Downloader"
 icon = "src/ytdlpgui/resources/ytdlpgui"
