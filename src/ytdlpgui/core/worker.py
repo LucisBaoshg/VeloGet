@@ -92,7 +92,13 @@ class YtDlpWorker:
                 info = ydl.extract_info(url, download=False)
                 return {"status": "success", "data": info}
         except Exception as e:
-            return {"status": "error", "error": str(e)}
+            err_msg = str(e)
+            if "Could not copy Chrome cookie database" in err_msg:
+                return {
+                    "status": "error", 
+                    "error": "无法读取浏览器 Cookie。\n\n这是 Windows 系统的限制，请尝试：\n1. 【关闭 Chrome 浏览器】后重试\n2. 或者使用 Firefox 浏览器"
+                }
+            return {"status": "error", "error": err_msg}
 
     async def download_video(self, url, format_id, browser, profile, on_log=None, on_progress=None):
         return await asyncio.to_thread(
@@ -170,4 +176,10 @@ class YtDlpWorker:
             is_verification = "Sign in to confirm" in err_msg or "429" in err_msg
             return {"status": "error", "error": err_msg, "verification_required": is_verification}
         except Exception as e:
+            err_msg = str(e)
+            if "Could not copy Chrome cookie database" in err_msg:
+                return {
+                    "status": "error", 
+                    "error": "无法读取浏览器 Cookie。\n\n这是 Windows 系统的限制，请尝试：\n1. 【关闭 Chrome 浏览器】后重试\n2. 或者使用 Firefox 浏览器"
+                }
             return {"status": "error", "error": str(e)}
