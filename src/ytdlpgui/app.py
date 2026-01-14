@@ -9,6 +9,14 @@ from .config import ConfigManager
 from .core.worker import YtDlpWorker
 from .core.utils import scan_chrome_profiles
 
+# Force inclusion of pycryptodomex for Windows packaging
+def _keep_dependencies():
+    try:
+        import Cryptodome
+        import Cryptodome.Cipher.AES
+    except ImportError:
+        pass
+
 class YtDlpGUI(toga.App):
     def startup(self):
         # 0. Hot-Swap yt-dlp override

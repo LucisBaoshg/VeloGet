@@ -93,15 +93,17 @@ class YtDlpWorker:
                 return {"status": "success", "data": info}
         except Exception as e:
             err_msg = str(e)
-            if "Could not copy Chrome cookie database" in err_msg:
+            debug_print(f"Analyze Error: {err_msg}")
+
+            if "could not copy chrome cookie database" in err_msg.lower():
                 return {
                     "status": "error", 
-                    "error": "无法读取浏览器 Cookie。\n\n这是 Windows 系统的限制，请尝试：\n1. 【关闭 Chrome 浏览器】后重试\n2. 或者使用 Firefox 浏览器"
+                    "error": "【浏览器被占用】\n\n无法读取 Chrome Cookie，因为浏览器正在运行。\n\n请尝试：\n1. 完全关闭 Chrome 浏览器\n2. 再次点击“分析链接”"
                 }
-            if "Failed to decrypt with DPAPI" in err_msg:
+            if "failed to decrypt with dpapi" in err_msg.lower():
                 return {
                     "status": "error",
-                    "error": "无法解密 Chrome Cookie (DPAPI 错误)。\n\n这通常是因为 Windows 权限隔离导致。\n\n建议方案：\n1. 改用 Firefox 浏览器 (推荐)\n2. 或者尝试不使用 Cookie 下载"
+                    "error": "【解密失败】\n\n无法解密 Chrome Cookie (DPAPI 错误)。通常是因为 Windows 权限问题。\n\n建议：\n1. 尝试使用 Firefox 浏览器\n2. 或不使用 Cookie 下载"
                 }
             return {"status": "error", "error": err_msg}
 
@@ -175,21 +177,24 @@ class YtDlpWorker:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
             return {"status": "success"}
-        except yt_dlp.utils.DownloadError as e:
-            err_msg = str(e)
-            # Check for verification need
-            is_verification = "Sign in to confirm" in err_msg or "429" in err_msg
-            return {"status": "error", "error": err_msg, "verification_required": is_verification}
         except Exception as e:
             err_msg = str(e)
-            if "Could not copy Chrome cookie database" in err_msg:
-                return {
+            debug_print(f"Download Error: {err_msg}")
+            
+            # Check for verification need
+            is_verification = "Sign in to confirm" in err_msg or "429" in err_msg
+            
+            # Check for specific known errors
+            if "could not copy chrome cookie database" in err_msg.lower():
+                 return {
                     "status": "error", 
-                    "error": "无法读取浏览器 Cookie。\n\n这是 Windows 系统的限制，请尝试：\n1. 【关闭 Chrome 浏览器】后重试\n2. 或者使用 Firefox 浏览器"
+                    "error": "【浏览器被占用】\n\n无法读取 Chrome Cookie，因为浏览器正在运行。\n\n请尝试：\n1. 完全关闭 Chrome 浏览器\n2. 再次点击下载"
                 }
-            if "Failed to decrypt with DPAPI" in err_msg:
-                return {
+            if "failed to decrypt with dpapi" in err_msg.lower():
+                 return {
                     "status": "error",
-                    "error": "无法解密 Chrome Cookie (DPAPI 错误)。\n\n这通常是因为 Windows 权限隔离导致。\n\n建议方案：\n1. 改用 Firefox 浏览器 (推荐)\n2. 或者尝试不使用 Cookie 下载"
+                    "error": "【解密失败】\n\n无法解密 Chrome Cookie (DPAPI 错误)。通常是因为 Windows 权限问题。\n\n建议：\n1. 尝试使用 Firefox 浏览器\n2. 或不使用 Cookie 下载"
                 }
+                
+            return {"status": "error", "error": err_msg, "verification_required": is_verification}
             return {"status": "error", "error": str(e)}

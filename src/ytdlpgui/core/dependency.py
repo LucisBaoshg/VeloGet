@@ -59,12 +59,16 @@ class DependencyManager:
         return self.get_deno_path() is not None
 
     async def install_ffmpeg(self, progress_callback=None):
-        # Valid for macOS ARM64 (Apple Silicon) as target is restricted
-        # Using martin-riedl.de (Reliable static builds for macOS)
-        # Snapshot build is usually fine, or we can pick a release.
-        # Direct ZIP link:
-        url = "https://ffmpeg.martin-riedl.de/redirect/latest/macos/arm64/snapshot/ffmpeg.zip"
-        await self._download_and_extract(url, "ffmpeg", progress_callback)
+        import sys
+        if sys.platform == 'win32':
+             # Windows: Gyan.dev release essentials
+             url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+             await self._download_and_extract(url, "ffmpeg", progress_callback)
+        else:
+            # Valid for macOS ARM64 (Apple Silicon) as target is restricted
+            # Using martin-riedl.de (Reliable static builds for macOS)
+            url = "https://ffmpeg.martin-riedl.de/redirect/latest/macos/arm64/snapshot/ffmpeg.zip"
+            await self._download_and_extract(url, "ffmpeg", progress_callback)
 
     def get_ffmpeg_version(self):
         path = self.get_ffmpeg_path()
@@ -92,8 +96,13 @@ class DependencyManager:
         return "Unknown Version"
 
     async def install_deno(self, progress_callback=None):
+        import sys
         # Official Deno release
-        url = "https://github.com/denoland/deno/releases/latest/download/deno-aarch64-apple-darwin.zip"
+        if sys.platform == 'win32':
+             url = "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip"
+        else:
+             url = "https://github.com/denoland/deno/releases/latest/download/deno-aarch64-apple-darwin.zip"
+        
         await self._download_and_extract(url, "deno", progress_callback)
 
     async def get_latest_ytdlp_version(self, url=None, timeout=30):
@@ -132,7 +141,10 @@ class DependencyManager:
         ctx.verify_mode = ssl.CERT_NONE
 
         def download_chunked():
-            with urllib.request.urlopen(url, context=ctx) as response:
+            req = urllib.request.Request(url, headers={
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            })
+            with urllib.request.urlopen(req, context=ctx) as response:
                 total_size = int(response.info().get('Content-Length', 0))
                 downloaded = 0
                 block_size = 8192
@@ -146,7 +158,6 @@ class DependencyManager:
                         f.write(buffer)
                         if progress_callback and total_size > 0:
                             percent = (downloaded / total_size) * 100
-                            # Run callback on main thread if possible, or just call it (thread safety handled by caller)
                             progress_callback(percent, f"Downloading {binary_name}...")
 
         await asyncio.to_thread(download_chunked)
@@ -156,17 +167,66 @@ class DependencyManager:
 
         # Extract
         def extract():
-            with zipfile.ZipFile(dest_zip, 'r') as zip_ref:
-                zip_ref.extractall(self.bin_dir)
+            import time
+            import gc
             
-            # Cleanup
-            dest_zip.unlink()
+            # Ensure file handle is released
+            gc.collect()
+            
+            with zipfile.ZipFile(dest_zip, 'r') as zip_ref:
+                # Extract to a temp dir first to handle nested folders
+                temp_extract_dir = self.bin_dir / f"{binary_name}_temp"
+                if temp_extract_dir.exists(): shutil.rmtree(temp_extract_dir)
+                temp_extract_dir.mkdir()
+                
+                zip_ref.extractall(temp_extract_dir)
+            
+            # Force close handles
+            del zip_ref
+            gc.collect()
+            
+            # Find binary recursively
+            target_bin = None
+            exe_name = f"{binary_name}.exe"
+            
+            for root, dirs, files in os.walk(temp_extract_dir):
+                if binary_name in files:
+                    target_bin = Path(root) / binary_name
+                    break
+                if exe_name in files:
+                    target_bin = Path(root) / exe_name
+                    break
+            
+            def safe_remove(path):
+                if not path.exists(): return
+                for i in range(5):
+                    try:
+                        if path.is_dir(): shutil.rmtree(path)
+                        else: path.unlink()
+                        return
+                    except Exception:
+                        time.sleep(0.5)
+                        gc.collect()
+            
+            if target_bin:
+                # Move to bin_dir
+                final_dest = self.bin_dir / target_bin.name
+                if final_dest.exists(): final_dest.unlink()
+                shutil.move(str(target_bin), str(final_dest))
+                
+                # Cleanup temp
+                safe_remove(temp_extract_dir)
+                safe_remove(dest_zip)
 
-            # Chmod +x
-            bin_path = self.bin_dir / binary_name
-            if bin_path.exists():
-                st = os.stat(bin_path)
-                os.chmod(bin_path, st.st_mode | stat.S_IEXEC)
+                # Chmod +x
+                if final_dest.exists():
+                    st = os.stat(final_dest)
+                    os.chmod(final_dest, st.st_mode | stat.S_IEXEC)
+            else:
+                # Cleanup even if failed
+                safe_remove(temp_extract_dir)
+                safe_remove(dest_zip)
+                raise Exception(f"Could not find {binary_name} in downloaded archive")
         
         await asyncio.to_thread(extract)
 

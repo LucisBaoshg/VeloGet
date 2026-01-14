@@ -19,13 +19,19 @@ def get_ytdlp_command():
     return [sys.executable, "-m", "yt_dlp"]
 
 def scan_chrome_profiles():
-    """扫描 macOS 上的 Chrome 配置文件"""
+    """扫描 Chrome 配置文件 (支持 macOS 和 Windows)"""
     profiles = ["Default"]
-    if sys.platform != "darwin":
-        return profiles
+    
+    chrome_root = None
+    if sys.platform == "darwin":
+        chrome_root = Path.home() / "Library/Application Support/Google/Chrome"
+    elif sys.platform == "win32":
+        # Windows: %LOCALAPPDATA%\Google\Chrome\User Data
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if local_app_data:
+            chrome_root = Path(local_app_data) / "Google" / "Chrome" / "User Data"
 
-    chrome_root = Path.home() / "Library/Application Support/Google/Chrome"
-    if not chrome_root.exists():
+    if not chrome_root or not chrome_root.exists():
         return profiles
 
     # 查找 "Profile *" 文件夹
@@ -45,7 +51,10 @@ def get_environ_with_js_engine(js_engine_path_override=None):
     if '_MEIPASS' in env: del env['_MEIPASS']
     
     # 确保 PATH 包含 /usr/local/bin 等常用路径 (macOS GUI app 默认 PATH 很短)
-    default_paths = ["/usr/local/bin", "/opt/homebrew/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+    default_paths = []
+    if sys.platform != "win32":
+        default_paths = ["/usr/local/bin", "/opt/homebrew/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+    
     current_path = env.get("PATH", "")
     
     # 构建新 PATH
@@ -53,13 +62,12 @@ def get_environ_with_js_engine(js_engine_path_override=None):
     
     if js_engine_path_override:
         debug_print(f"Using configured JS Engine path: {js_engine_path_override}")
-        new_path_parts.append(js_engine_path_override)
+        new_path_parts.append(str(js_engine_path_override))
         
     new_path_parts.extend(default_paths)
     new_path_parts.append(current_path)
     
-    # 去重并连接
-    # (简单连接即可，shell 会处理)
-    env["PATH"] = ":".join(new_path_parts)
+    # 去重并连接 (使用 os.pathsep 自动适配 : 或 ;)
+    env["PATH"] = os.pathsep.join(new_path_parts)
     
     return env
