@@ -66,6 +66,9 @@ class YtDlpGUI(toga.App):
             if self.browser_select.value != last_browser:
                  self.config.set_last_browser(self.browser_select.value)
             
+            # Initial UI State Refresh for cookies
+            self.refresh_ui_state()
+            
             top_box = toga.Box(style=Pack(direction=ROW, padding=10, alignment="center")) # Increased padding
             top_box.add(toga.Label("Browser:", style=Pack(padding_right=10)))
             top_box.add(self.browser_select)
@@ -136,6 +139,23 @@ class YtDlpGUI(toga.App):
     def on_browser_change(self, widget):
         self.update_profiles()
         self.config.set_last_browser(widget.value)
+
+    def refresh_ui_state(self):
+        # Check if cookie file is set
+        cookie_file = self.config.get_cookie_file()
+        import os
+        has_cookie_file = bool(cookie_file and os.path.exists(cookie_file))
+        
+        if has_cookie_file:
+            self.browser_select.enabled = False
+            self.profile_select.enabled = False
+            # Ideally change label or tooltip, but Toga limitations apply.
+            # We can try setting the label text if we kept a reference? 
+            # We didn't keep reference to "Browser:" label. 
+            # But disabling the select is a good enough hint.
+        else:
+            self.browser_select.enabled = True
+            self.profile_select.enabled = True
 
     def open_settings(self, widget):
         try:

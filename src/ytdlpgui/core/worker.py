@@ -218,9 +218,16 @@ class YtDlpWorker:
                 }
 
             if "[douyin]" in err_msg.lower() and "fresh cookies" in err_msg.lower():
-                return {
-                    "status": "error", 
-                    "error": "【Douyin Cookie 过期】\n\n抖音检测到 Cookie 失效。\n\n解决方案：\n1. 打开 Firefox 浏览器\n2. 访问 douyin.com 并登录\n3. 随便刷几个视频以刷新 Token\n4. 关闭浏览器后重试"
-                }
+                # Check if we are using a manual file
+                if self.config.get_cookie_file():
+                     return {
+                        "status": "error", 
+                        "error": "【Cookie 文件已过期】\n\n您指定的 cookies.txt 似乎已经失效。\n\n解决方案：\n1. 请在浏览器中重新登录抖音\n2. 重新导出 cookies.txt\n3. 在设置中重新选择该文件"
+                    }
+                else:
+                    return {
+                        "status": "error", 
+                        "error": "【Douyin Cookie 过期】\n\n抖音检测到 Cookie 失效。\n\n解决方案：\n1. 打开 Firefox 浏览器\n2. 访问 douyin.com 并登录\n3. 随便刷几个视频以刷新 Token\n4. 关闭浏览器后重试"
+                    }
                 
             return {"status": "error", "error": err_msg, "verification_required": is_verification}

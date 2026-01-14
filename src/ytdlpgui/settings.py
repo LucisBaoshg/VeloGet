@@ -213,12 +213,16 @@ class SettingsWindow(toga.Window):
             if path:
                 self.config.set_cookie_file(str(path))
                 self.cookie_input.value = str(path)
+                # Refresh main window UI state
+                self.app_instance.refresh_ui_state()
         except ValueError:
             pass # User cancelled
 
     def clear_cookie_file(self, widget):
         self.config.set_cookie_file("")
         self.cookie_input.value = ""
+        # Refresh main window UI state
+        self.app_instance.refresh_ui_state()
 
     async def install_ffmpeg(self, widget):
         await self._install_task("ffmpeg", self.deps.install_ffmpeg)
