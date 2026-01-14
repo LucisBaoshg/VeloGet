@@ -38,7 +38,7 @@ class SettingsWindow(toga.Window):
         # FFmpeg
         ffmpeg_box = toga.Box(style=Pack(direction=ROW, padding=5, alignment="center"))
         self.ffmpeg_label = toga.Label("FFmpeg: 检测中...", style=Pack(flex=1))
-        self.ffmpeg_btn = toga.Button("安装", on_press=self.install_ffmpeg, style=Pack(width=80))
+        self.ffmpeg_btn = toga.Button("安装", on_press=self.install_ffmpeg, style=Pack(width=80), enabled=False) # Initially disabled
         ffmpeg_box.add(self.ffmpeg_label)
         ffmpeg_box.add(self.ffmpeg_btn)
         main_box.add(ffmpeg_box)
@@ -46,7 +46,7 @@ class SettingsWindow(toga.Window):
         # Deno
         deno_box = toga.Box(style=Pack(direction=ROW, padding=5, alignment="center"))
         self.deno_label = toga.Label("Deno: 检测中...", style=Pack(flex=1))
-        self.deno_btn = toga.Button("安装", on_press=self.install_deno, style=Pack(width=80))
+        self.deno_btn = toga.Button("安装", on_press=self.install_deno, style=Pack(width=80), enabled=False) # Initially disabled
         deno_box.add(self.deno_label)
         deno_box.add(self.deno_btn)
         main_box.add(deno_box)
