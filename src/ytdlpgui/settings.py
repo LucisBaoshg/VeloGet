@@ -120,49 +120,51 @@ class SettingsWindow(toga.Window):
         
         # Trigger check with delay to let UI render
         asyncio.create_task(self.check_for_updates())
+        asyncio.create_task(self.update_env_status())
         
-        # 4. Progress Section
-        self.progress_box = toga.Box(style=Pack(direction=COLUMN, padding=(20, 0)))
-        self.progress = toga.ProgressBar(max=100, style=Pack(flex=1))
-        self.progress_label = toga.Label("就绪", style=Pack(padding_top=5, text_align="center"))
-        
-        self.progress_box.add(self.progress)
-        self.progress_box.add(self.progress_label)
-        main_box.add(self.progress_box)
-
-        # Refresh status on load
-        self.refresh_status()
         self.content = main_box
 
-    def refresh_status(self):
-        has_ffmpeg = self.deps.is_ffmpeg_installed()
-        has_deno = self.deps.is_deno_installed()
+    async def update_env_status(self):
+        # Run subprocess checks in thread to avoid blocking UI
+        loop = asyncio.get_running_loop()
+        
+        def get_status():
+            ff_ver = self.deps.get_ffmpeg_version() if self.deps.is_ffmpeg_installed() else None
+            deno_ver = self.deps.get_deno_version() if self.deps.is_deno_installed() else None
+            return ff_ver, deno_ver
 
-        if has_ffmpeg:
-            ver = self.deps.get_ffmpeg_version()
-            self.ffmpeg_label.text = f"FFmpeg: ✅ 已安装 ({ver})"
-            self.ffmpeg_btn.label = "已安装"
-            self.ffmpeg_btn.enabled = False
-        else:
-            self.ffmpeg_label.text = "FFmpeg: ❌ 未安装 (将自动降级画质)"
-            self.ffmpeg_btn.label = "安装"
-            self.ffmpeg_btn.enabled = True
-            
-        if has_deno:
-            ver = self.deps.get_deno_version()
-            if "Unknown" in ver:
-                 # Installed but version unknown -> Likely corrupted or partial install
-                 self.deno_label.text = f"Deno: ⚠️ 已安装 (未知版本)"
-                 self.deno_btn.label = "重新安装"
-                 self.deno_btn.enabled = True
+        ff_ver, deno_ver = await asyncio.to_thread(get_status)
+
+        # Update UI on main thread
+        def update_ui():
+            if ff_ver:
+                self.ffmpeg_label.text = f"FFmpeg: ✅ 已安装 ({ff_ver})"
+                self.ffmpeg_btn.label = "已安装"
+                self.ffmpeg_btn.enabled = False
             else:
-                 self.deno_label.text = f"Deno: ✅ 已安装 ({ver})"
-                 self.deno_btn.label = "已安装"
-                 self.deno_btn.enabled = False
-        else:
-            self.deno_label.text = "Deno: ❌ 未安装 (推荐)"
-            self.deno_btn.label = "安装"
-            self.deno_btn.enabled = True
+                self.ffmpeg_label.text = "FFmpeg: ❌ 未安装 (将自动降级画质)"
+                self.ffmpeg_btn.label = "安装"
+                self.ffmpeg_btn.enabled = True
+                
+            if deno_ver:
+                if "Unknown" in deno_ver:
+                     self.deno_label.text = f"Deno: ⚠️ 已安装 (未知版本)"
+                     self.deno_btn.label = "重新安装"
+                     self.deno_btn.enabled = True
+                else:
+                     self.deno_label.text = f"Deno: ✅ 已安装 ({deno_ver})"
+                     self.deno_btn.label = "已安装"
+                     self.deno_btn.enabled = False
+            else:
+                self.deno_label.text = "Deno: ❌ 未安装 (推荐)"
+                self.deno_btn.label = "安装"
+                self.deno_btn.enabled = True
+
+        loop.call_soon_threadsafe(update_ui)
+            
+    # Legacy sync method removed or kept as empty if referenced elsewhere (unlikely)
+    def refresh_status(self):
+        asyncio.create_task(self.update_env_status())
 
     async def select_download_dir(self, widget):
         try:

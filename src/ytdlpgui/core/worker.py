@@ -98,13 +98,20 @@ class YtDlpWorker:
             if "could not copy chrome cookie database" in err_msg.lower():
                 return {
                     "status": "error", 
-                    "error": "【浏览器被占用】\n\n无法读取 Chrome Cookie，因为浏览器正在运行。\n\n请尝试：\n1. 完全关闭 Chrome 浏览器\n2. 再次点击“分析链接”"
+                    "error": "【浏览器被占用】\n\nWindows 下无法读取运行中的 Chrome Cookie。\n\n解决方案：\n1. 推荐：在上方切换为【Firefox】(无需关闭浏览器)\n2. 或者：完全退出 Chrome 后重试"
                 }
             if "failed to decrypt with dpapi" in err_msg.lower():
                 return {
                     "status": "error",
-                    "error": "【解密失败】\n\n无法解密 Chrome Cookie (DPAPI 错误)。通常是因为 Windows 权限问题。\n\n建议：\n1. 尝试使用 Firefox 浏览器\n2. 或不使用 Cookie 下载"
+                    "error": "【Cookie 解密失败】\n\nWindows 安全限制导致无法读取 Chrome 数据。\n\n请务必：\n使用【Firefox】浏览器进行下载 (需先安装并登录)"
                 }
+            if "browser" in err_msg.lower() and "found" in err_msg.lower(): 
+                 # Handle "Could not find browser" or similar
+                 return {
+                    "status": "error",
+                    "error": f"【未找到浏览器】\n\n系统未检测到 {browser}。\n\n请先安装 {browser} 浏览器并登录 YouTube。"
+                 }
+                 
             return {"status": "error", "error": err_msg}
 
     async def download_video(self, url, format_id, browser, profile, on_log=None, on_progress=None):

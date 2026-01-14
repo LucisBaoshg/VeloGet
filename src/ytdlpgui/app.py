@@ -46,12 +46,25 @@ class YtDlpGUI(toga.App):
             # --- UI Components ---
             
             # 1. Browser/Profile Selection
-            self.browser_select = toga.Selection(items=['chrome', 'firefox', 'safari'], on_change=self.on_browser_change)
-            self.browser_select.value = self.config.get_last_browser()
+            browsers = ['chrome', 'firefox', 'safari']
+            if sys.platform == 'win32':
+                # Windows specific: Default Firefox (more reliable), remove Safari
+                browsers = ['firefox', 'chrome']
+                
+            self.browser_select = toga.Selection(items=browsers, on_change=self.on_browser_change)
+            
+            # Smart default handling
+            last_browser = self.config.get_last_browser()
+            if sys.platform == 'win32' and not last_browser:
+                self.browser_select.value = 'firefox'
+            elif last_browser in browsers:
+                self.browser_select.value = last_browser
             
             self.profile_select = toga.Selection(items=['Default']) # Updated dynamically
             self.update_profiles()
-            self.profile_select.value = self.config.get_last_profile()
+            # If changed by logic above, save it
+            if self.browser_select.value != last_browser:
+                 self.config.set_last_browser(self.browser_select.value)
             
             top_box = toga.Box(style=Pack(direction=ROW, padding=10, alignment="center")) # Increased padding
             top_box.add(toga.Label("Browser:", style=Pack(padding_right=10)))
