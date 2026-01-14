@@ -118,6 +118,14 @@ class SettingsWindow(toga.Window):
         kernel_box.add(update_box)
         main_box.add(kernel_box)
         
+        main_box.add(toga.Divider(style=Pack(padding=(10, 0))))
+
+        # Progress Section
+        self.progress_label = toga.Label("就绪", style=Pack(padding_top=5, font_size=11))
+        self.progress = toga.ProgressBar(style=Pack(padding_top=5, flex=1))
+        main_box.add(self.progress_label)
+        main_box.add(self.progress)
+        
         # Trigger check with delay to let UI render
         asyncio.create_task(self.check_for_updates())
         asyncio.create_task(self.update_env_status())
@@ -139,25 +147,25 @@ class SettingsWindow(toga.Window):
         def update_ui():
             if ff_ver:
                 self.ffmpeg_label.text = f"FFmpeg: ✅ 已安装 ({ff_ver})"
-                self.ffmpeg_btn.label = "已安装"
+                self.ffmpeg_btn.text = "已安装"
                 self.ffmpeg_btn.enabled = False
             else:
                 self.ffmpeg_label.text = "FFmpeg: ❌ 未安装 (将自动降级画质)"
-                self.ffmpeg_btn.label = "安装"
+                self.ffmpeg_btn.text = "安装"
                 self.ffmpeg_btn.enabled = True
                 
             if deno_ver:
                 if "Unknown" in deno_ver:
                      self.deno_label.text = f"Deno: ⚠️ 已安装 (未知版本)"
-                     self.deno_btn.label = "重新安装"
+                     self.deno_btn.text = "重新安装"
                      self.deno_btn.enabled = True
                 else:
                      self.deno_label.text = f"Deno: ✅ 已安装 ({deno_ver})"
-                     self.deno_btn.label = "已安装"
+                     self.deno_btn.text = "已安装"
                      self.deno_btn.enabled = False
             else:
                 self.deno_label.text = "Deno: ❌ 未安装 (推荐)"
-                self.deno_btn.label = "安装"
+                self.deno_btn.text = "安装"
                 self.deno_btn.enabled = True
 
         loop.call_soon_threadsafe(update_ui)
@@ -255,7 +263,7 @@ class SettingsWindow(toga.Window):
         loop = asyncio.get_running_loop()
         def update_ui(label_text, btn_text, btn_enabled):
             self.version_label.text = label_text
-            self.update_btn.label = btn_text
+            self.update_btn.text = btn_text
             self.update_btn.enabled = btn_enabled
 
         loop.call_soon_threadsafe(lambda: update_ui(f"核心版本: {self.current_version} (正在连接 '{source_label}'...)", "检查中...", False))
