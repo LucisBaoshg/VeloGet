@@ -23,7 +23,8 @@ class ConfigManager:
                 "js_engine_path": "",
                 "download_dir": str(Path.home() / "Downloads"),
                 "last_browser": "chrome",
-                "last_profile": "Default"
+                "last_profile": "Default",
+                "cookie_file": ""
             }
             self._save_data(default_config)
 
@@ -120,4 +121,11 @@ class ConfigManager:
 
     def set_update_timeout(self, seconds: int):
         self.config_data["update_timeout"] = seconds
+        self.save()
+
+    def get_cookie_file(self):
+        return self.config_data.get("cookie_file", "")
+
+    def set_cookie_file(self, path):
+        self.config_data["cookie_file"] = path
         self.save()

@@ -58,8 +58,31 @@ class SettingsWindow(toga.Window):
         main_box.add(info_lbl)
         
         main_box.add(toga.Divider(style=Pack(padding=(15, 0))))
+        
+        # --- 2b. Cookie Injection (for Douyin etc) ---
+        main_box.add(toga.Label("Cookie 注入 (解决 Douyin 报错)", style=Pack(padding_bottom=10, font_weight='bold', font_size=14)))
+        
+        cookie_box = toga.Box(style=Pack(direction=ROW, alignment="center", padding_bottom=5))
+        cookie_box.add(toga.Label("Cookie File:", style=Pack(width=70)))
+        
+        self.cookie_input = toga.TextInput(readonly=True, placeholder="未选择 (使用默认浏览器)", style=Pack(flex=1, padding=(0, 10)))
+        self.cookie_input.value = self.config.get_cookie_file()
+        
+        cookie_browse_btn = toga.Button("选择...", on_press=self.select_cookie_file)
+        cookie_clear_btn = toga.Button("清除", on_press=self.clear_cookie_file, style=Pack(padding_left=5))
+        
+        cookie_box.add(self.cookie_input)
+        cookie_box.add(cookie_browse_btn)
+        cookie_box.add(cookie_clear_btn)
+        main_box.add(cookie_box)
+        
+        cookie_info = toga.Label("注意: 设置此项后将忽略上方浏览器选择，强制使用该 cookies.txt", 
+                               style=Pack(padding=(0, 0, 10, 0), font_size=11, color='#666666'))
+        main_box.add(cookie_info)
+        
+        main_box.add(toga.Divider(style=Pack(padding_bottom=15)))
 
-        # --- 3. Kernel Updates ---
+        # --- 3. Run Environment ---
         # --- 3. Kernel Updates ---
         import yt_dlp
         self.current_version = yt_dlp.version.__version__
@@ -182,6 +205,20 @@ class SettingsWindow(toga.Window):
                 self.dir_input.value = str(path)
         except ValueError:
             pass # User cancelled
+
+    async def select_cookie_file(self, widget):
+        try:
+            # Filter for txt files or all files
+            path = await self.app_instance.main_window.open_file_dialog("选择 cookies.txt", file_types=["txt"])
+            if path:
+                self.config.set_cookie_file(str(path))
+                self.cookie_input.value = str(path)
+        except ValueError:
+            pass # User cancelled
+
+    def clear_cookie_file(self, widget):
+        self.config.set_cookie_file("")
+        self.cookie_input.value = ""
 
     async def install_ffmpeg(self, widget):
         await self._install_task("ffmpeg", self.deps.install_ffmpeg)

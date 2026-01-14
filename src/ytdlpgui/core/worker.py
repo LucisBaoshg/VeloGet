@@ -82,7 +82,11 @@ class YtDlpWorker:
             'format': 'best/bestvideo+bestaudio',
         }
 
-        if profile:
+        cookie_file = self.config.get_cookie_file()
+        if cookie_file and os.path.exists(cookie_file):
+            ydl_opts['cookiefile'] = cookie_file
+            debug_print(f"Using Manual Cookie File: {cookie_file}")
+        elif profile:
             ydl_opts['cookiesfrombrowser'] = (browser, profile, None, None)
         else:
             ydl_opts['cookiesfrombrowser'] = (browser, None, None, None)
@@ -111,6 +115,12 @@ class YtDlpWorker:
                     "status": "error",
                     "error": f"【未找到浏览器】\n\n系统未检测到 {browser}。\n\n请先安装 {browser} 浏览器并登录 YouTube。"
                  }
+
+            if "[douyin]" in err_msg.lower() and "fresh cookies" in err_msg.lower():
+                return {
+                    "status": "error",
+                    "error": "【Douyin Cookie 过期】\n\n抖音检测到 Cookie 失效。\n\n解决方案：\n1. 打开 Firefox 浏览器\n2. 访问 douyin.com 并登录\n3. 随便刷几个视频以刷新 Token\n4. 关闭浏览器后重试"
+                }
                  
             return {"status": "error", "error": err_msg}
 
@@ -175,7 +185,11 @@ class YtDlpWorker:
                  # So if no ffmpeg, we must strip `+bestaudio`
                  ydl_opts['format'] = format_id
 
-        if profile:
+        cookie_file = self.config.get_cookie_file()
+        if cookie_file and os.path.exists(cookie_file):
+            ydl_opts['cookiefile'] = cookie_file
+            debug_print(f"Using Manual Cookie File: {cookie_file}")
+        elif profile:
             ydl_opts['cookiesfrombrowser'] = (browser, profile, None, None)
         else:
             ydl_opts['cookiesfrombrowser'] = (browser, None, None, None)
@@ -202,6 +216,11 @@ class YtDlpWorker:
                     "status": "error",
                     "error": "【解密失败】\n\n无法解密 Chrome Cookie (DPAPI 错误)。通常是因为 Windows 权限问题。\n\n建议：\n1. 尝试使用 Firefox 浏览器\n2. 或不使用 Cookie 下载"
                 }
+
+            if "[douyin]" in err_msg.lower() and "fresh cookies" in err_msg.lower():
+                return {
+                    "status": "error", 
+                    "error": "【Douyin Cookie 过期】\n\n抖音检测到 Cookie 失效。\n\n解决方案：\n1. 打开 Firefox 浏览器\n2. 访问 douyin.com 并登录\n3. 随便刷几个视频以刷新 Token\n4. 关闭浏览器后重试"
+                }
                 
             return {"status": "error", "error": err_msg, "verification_required": is_verification}
-            return {"status": "error", "error": str(e)}
