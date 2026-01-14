@@ -150,9 +150,15 @@ class SettingsWindow(toga.Window):
             
         if has_deno:
             ver = self.deps.get_deno_version()
-            self.deno_label.text = f"Deno: ✅ 已安装 ({ver})"
-            self.deno_btn.label = "已安装"
-            self.deno_btn.enabled = False
+            if "Unknown" in ver:
+                 # Installed but version unknown -> Likely corrupted or partial install
+                 self.deno_label.text = f"Deno: ⚠️ 已安装 (未知版本)"
+                 self.deno_btn.label = "重新安装"
+                 self.deno_btn.enabled = True
+            else:
+                 self.deno_label.text = f"Deno: ✅ 已安装 ({ver})"
+                 self.deno_btn.label = "已安装"
+                 self.deno_btn.enabled = False
         else:
             self.deno_label.text = "Deno: ❌ 未安装 (推荐)"
             self.deno_btn.label = "安装"
