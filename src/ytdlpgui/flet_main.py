@@ -94,11 +94,29 @@ class VeloGetApp:
         self.content_container.update()
 
 def run():
+    import sys
     app = VeloGetApp()
     
-    # Calculate assets directory relative to this file
-    basedir = os.path.dirname(os.path.abspath(__file__))
-    assets = os.path.join(basedir, "resources")
+    # Correct Asset Resolution Logic
+    # In Dev (Source): assets/ is in project root (../../assets relative to this file)
+    # In Prod (Frozen): assets/ is usually bundled alongside executable or in _MEIPASS
+    
+    if getattr(sys, 'frozen', False):
+        # Packaged mode
+        basedir = os.path.dirname(sys.executable)
+        assets = os.path.join(basedir, "assets") # Default flet build structure?
+        # Flet often handles assets automatically if bundled correctly.
+        # But let's try to find where they are.
+        if not os.path.exists(assets):
+            # Try _MEIPASS for OneFile
+            if hasattr(sys, '_MEIPASS'):
+                 assets = os.path.join(sys._MEIPASS, "assets")
+    else:
+        # Source mode: src/ytdlpgui/flet_main.py -> ../../assets
+        basedir = os.path.dirname(os.path.abspath(__file__))
+        assets = os.path.abspath(os.path.join(basedir, "..", "..", "assets"))
+
+    print(f"DEBUG: Assets directory resolved to: {assets}")
     
     ft.app(target=app.main, assets_dir=assets)
 

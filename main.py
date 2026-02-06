@@ -1,12 +1,43 @@
 import sys
 import os
+import traceback
+from datetime import datetime
 from pathlib import Path
 
-# Fix: Redirect stdout/stderr to devnull if we are frozen and have no console
-# This prevents "OSError: [Errno 9] Bad file descriptor" on Windows GUI apps
-if getattr(sys, 'frozen', False) and sys.stdout is None:
-    sys.stdout = open(os.devnull, 'w')
-    sys.stderr = open(os.devnull, 'w')
+# --- Crash Logging Setup ---
+# Redirect stdout/stderr to a log file for debugging "White Screen" issues
+# This is critical because Windows GUI apps swallow console output.
+log_file = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "veloget_debug.log")
+
+def log_message(msg):
+    try:
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(f"[{datetime.now()}] {msg}\n")
+    except:
+        pass
+
+# Hook uncaught exceptions
+def exception_handler(exc_type, exc_value, exc_traceback):
+    err_msg = "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+    log_message(f"CRASH: {err_msg}")
+    # Also try to show a native message box if possible (optional, but helpful)
+    try:
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(0, f"App Crashed:\n{err_msg}", "VeloGet Error", 0x10)
+    except:
+        pass
+    sys.exit(1)
+
+sys.excepthook = exception_handler
+
+# Redirect standard streams if frozen (packaged)
+if getattr(sys, 'frozen', False):
+    sys.stdout = open(log_file, "a", encoding="utf-8", buffering=1)
+    sys.stderr = sys.stdout
+
+log_message("Application Starting...")
+log_message(f"CWD: {os.getcwd()}")
+log_message(f"Executable: {sys.executable}")
 
 # --- 1. Update Override Logic ---
 # Check if there is a downloaded update in ~/.ytdlpgui/updates
