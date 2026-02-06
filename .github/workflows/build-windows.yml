@@ -63,6 +63,8 @@ jobs:
       run: |
         $Version = "${{ steps.get_version.outputs.version }}"
         $ZipName = "VeloGet-Windows-$Version.zip"
+        # Ensure dist directory exists
+        New-Item -ItemType Directory -Force -Path "dist"
         Compress-Archive -Path "build/windows/*" -DestinationPath "dist/$ZipName"
 
     - name: Upload Artifact
