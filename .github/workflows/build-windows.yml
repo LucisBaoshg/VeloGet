@@ -1,4 +1,4 @@
-name: Build Windows MSI
+name: Build Windows App
 
 on:
   workflow_dispatch:
@@ -15,34 +15,56 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.10'
+        python-version: '3.12'
 
     - name: Install dependencies
       run: |
-        pip install briefcase toga yt-dlp
+        pip install -r requirements.txt
+        pip install tomli
 
-    - name: Download FFmpeg for Windows
+    - name: Prepare Internal Binaries (FFmpeg & yt-dlp)
       run: |
-        # Download FFmpeg
-        Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile "ffmpeg.zip"
-        # Extract
-        Expand-Archive -Path "ffmpeg.zip" -DestinationPath "ffmpeg_temp"
-        # Create destination dir
+        # Create directory
         New-Item -ItemType Directory -Force -Path "src/ytdlpgui/_internal"
-        # Move executables (Find them recursively as the zip structure varies slightly by version)
+
+        # 1. Download FFmpeg
+        Write-Host "Downloading FFmpeg..."
+        Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile "ffmpeg.zip"
+        Expand-Archive -Path "ffmpeg.zip" -DestinationPath "ffmpeg_temp"
         Get-ChildItem -Path "ffmpeg_temp" -Filter "ffmpeg.exe" -Recurse | Copy-Item -Destination "src/ytdlpgui/_internal"
         Get-ChildItem -Path "ffmpeg_temp" -Filter "ffprobe.exe" -Recurse | Copy-Item -Destination "src/ytdlpgui/_internal"
+        
+        # 2. Download yt-dlp.exe (Latest Release)
+        Write-Host "Downloading yt-dlp.exe..."
+        Invoke-WebRequest -Uri "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" -OutFile "src/ytdlpgui/_internal/yt-dlp.exe"
+        
         # Cleanup
         Remove-Item -Path "ffmpeg.zip"
         Remove-Item -Path "ffmpeg_temp" -Recurse -Force
 
-    - name: Build and Package
+    - name: Build with Flet
       run: |
-        briefcase build windows
-        briefcase package windows --adhoc-sign
+        flet build windows --project VeloGet --product VeloGet --org com.lucifer --copyright "Copyright (c) 2026 Lucifer" --exclude venv-new venv-final build dist .git .github
+      
+    - name: Get Version
+      id: get_version
+      shell: python
+      run: |
+        import tomli
+        import os
+        with open("pyproject.toml", "rb") as f:
+            version = tomli.load(f)["project"]["version"]
+        with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+            f.write(f"version={version}\n")
+
+    - name: Archive Release
+      run: |
+        $Version = "${{ steps.get_version.outputs.version }}"
+        $ZipName = "VeloGet-Windows-$Version.zip"
+        Compress-Archive -Path "build/windows/*" -DestinationPath "dist/$ZipName"
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: VeloGet-Windows-Installer
-        path: dist/*.msi
+        name: VeloGet-Windows
+        path: dist/*.zip
