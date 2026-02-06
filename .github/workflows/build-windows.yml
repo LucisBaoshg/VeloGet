@@ -43,6 +43,8 @@ jobs:
         Remove-Item -Path "ffmpeg_temp" -Recurse -Force
 
     - name: Build with Flet
+      env:
+        PYTHONIOENCODING: utf-8
       run: |
         flet build windows --project VeloGet --product VeloGet --org com.lucifer --copyright "Copyright (c) 2026 Lucifer" --exclude venv-new venv-final build dist .git .github
       
