@@ -48,13 +48,15 @@ class DownloaderView(ft.Column):
                 self.profile_dropdown.update()
                 
             except Exception as ex:
-                print(f"Profile scan error: {ex}")
+                from ...core.utils import debug_print
+                debug_print(f"Profile scan error: {ex}")
         
         import threading
         threading.Thread(target=update_profiles, daemon=True).start()
 
     def init_ui(self):
-        print("DEBUG: Initializing DownloaderView with TABLE layout")
+        from ...core.utils import debug_print
+        debug_print("DEBUG: Initializing DownloaderView with TABLE layout")
         # Header
         self.controls.append(
             ft.Text("视频下载器", size=28, weight=ft.FontWeight.BOLD)

@@ -5,8 +5,13 @@ import glob
 import shutil
 from pathlib import Path
 
+# Safe Logger for Windows GUI (No Console)
 def debug_print(message):
-    print(f"[DEBUG] {message}")
+    try:
+        if sys.stdout is not None:
+             print(f"[DEBUG] {message}")
+    except Exception:
+        pass # Ignore print errors in no-console mode
 
 def get_ytdlp_command():
     """

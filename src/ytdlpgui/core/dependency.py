@@ -157,7 +157,9 @@ class DependencyManager:
                     data = json.load(response)
                     return data['info']['version']
             except Exception as e:
-                print(f"Version Check Error ({url}): {e}")
+                import sys
+                if sys.stdout:
+                    print(f"Version Check Error ({url}): {e}")
                 return None
 
         return await asyncio.to_thread(fetch)

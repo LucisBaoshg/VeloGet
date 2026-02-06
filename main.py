@@ -2,6 +2,12 @@ import sys
 import os
 from pathlib import Path
 
+# Fix: Redirect stdout/stderr to devnull if we are frozen and have no console
+# This prevents "OSError: [Errno 9] Bad file descriptor" on Windows GUI apps
+if getattr(sys, 'frozen', False) and sys.stdout is None:
+    sys.stdout = open(os.devnull, 'w')
+    sys.stderr = open(os.devnull, 'w')
+
 # --- 1. Update Override Logic ---
 # Check if there is a downloaded update in ~/.ytdlpgui/updates
 # Structure: ~/.ytdlpgui/updates/yt_dlp/__init__.py

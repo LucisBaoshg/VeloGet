@@ -58,7 +58,8 @@ class AnalyzerView(ft.Column):
                 self.profile_dropdown.update()
                 
             except Exception as ex:
-                print(f"Profile scan error: {ex}")
+                from ...core.utils import debug_print
+                debug_print(f"Profile scan error: {ex}")
         
         # Run in thread
         import threading

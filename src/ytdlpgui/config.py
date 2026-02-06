@@ -41,59 +41,20 @@ class ConfigManager:
             with open(self.config_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=4, ensure_ascii=False)
         except Exception as e:
-            print(f"Error saving config: {e}")
+            # Safe print
+            import sys
+            if sys.stdout:
+                print(f"Error saving config: {e}")
 
     def save(self):
-        self._save_data(self.config_data)
-
-    def get_youtube_api_key(self):
-        return self.config_data.get("youtube_api_key", "")
-
-    def set_youtube_api_key(self, key):
-        self.config_data["youtube_api_key"] = key
-        self.save()
-
-    def get_js_engine_path(self):
-        # 1. Check user config
-        path = self.config_data.get("js_engine_path")
-        if path and os.path.exists(path):
-            return path
-
-        # 2. Check environment PATH and common locations explicitly
-        # macOS apps often have stripped PATH, so we must check common dirs manually.
-        search_paths = [
-            "/opt/homebrew/bin", 
-            "/usr/local/bin", 
-            os.path.expanduser("~/.deno/bin"),
-            os.path.expanduser("~/.nvm/versions/node"), # Rough check
-        ]
-        
-        # Helper to check specific binary
-        def check_bin(name):
-             # First check system PATH
-             res = shutil.which(name)
-             if res: return os.path.dirname(res)
-             
-             # Then check common paths
-             for p in search_paths:
-                 full_p = os.path.join(p, name)
-                 if os.path.exists(full_p) and os.access(full_p, os.X_OK):
-                     return p
-             return None
-
-        # Check Deno (Priority)
-        deno_path = check_bin("deno")
-        if deno_path: return deno_path
-
-        # Check Node
-        node_path = check_bin("node")
-        if node_path: return node_path
-            
-        return None
-
-    def set_js_engine_path(self, path):
-        self.config_data["js_engine_path"] = path
-        self.save()
+        try:
+            with open(self.config_file, 'w', encoding='utf-8') as f:
+                json.dump(self.config_data, f, indent=4)
+        except Exception as e:
+            # Safe print
+            import sys
+            if sys.stdout:
+                print(f"Error saving config: {e}")
 
     def get_download_dir(self):
         return self.config_data.get("download_dir", str(Path.home() / "Downloads"))
