@@ -48,6 +48,10 @@ class DependencyManager:
         if local_deno.exists() and os.access(local_deno, os.X_OK):
             return str(local_deno)
         
+        local_deno_exe = self.bin_dir / "deno.exe"
+        if local_deno_exe.exists():
+             return str(local_deno_exe)
+        
         # 2. System path (fallback) - reusing config logic effectively
         # But here we just want the binary path
         return shutil.which("deno")
@@ -60,15 +64,26 @@ class DependencyManager:
 
     async def install_ffmpeg(self, progress_callback=None):
         import sys
+        import platform
+
         if sys.platform == 'win32':
              # Windows: Gyan.dev release essentials
              url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
              await self._download_and_extract(url, "ffmpeg", progress_callback)
-        else:
-            # Valid for macOS ARM64 (Apple Silicon) as target is restricted
-            # Using martin-riedl.de (Reliable static builds for macOS)
-            url = "https://ffmpeg.martin-riedl.de/redirect/latest/macos/arm64/snapshot/ffmpeg.zip"
+        elif sys.platform == 'darwin':
+            # macOS
+            if platform.machine() == 'arm64':
+                # Apple Silicon
+                url = "https://ffmpeg.martin-riedl.de/redirect/latest/macos/arm64/snapshot/ffmpeg.zip"
+            else:
+                # Intel Mac (AMD64)
+                url = "https://ffmpeg.martin-riedl.de/redirect/latest/macos/amd64/snapshot/ffmpeg.zip"
+            
             await self._download_and_extract(url, "ffmpeg", progress_callback)
+        else:
+             # Linux or other - Placeholder/Error for now as we don't have a reliable static build URL handy
+             # or could use johnvansickle.com for linux
+             raise Exception(f"Automatic FFmpeg installation not supported for {sys.platform}. Please install FFmpeg manually.")
 
     def get_ffmpeg_version(self):
         path = self.get_ffmpeg_path()
@@ -97,13 +112,28 @@ class DependencyManager:
 
     async def install_deno(self, progress_callback=None):
         import sys
+        import platform
+
         # Official Deno release
         if sys.platform == 'win32':
              url = "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip"
+        elif sys.platform == 'darwin':
+             if platform.machine() == 'arm64':
+                 url = "https://github.com/denoland/deno/releases/latest/download/deno-aarch64-apple-darwin.zip"
+             else:
+                 url = "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-apple-darwin.zip"
         else:
-             url = "https://github.com/denoland/deno/releases/latest/download/deno-aarch64-apple-darwin.zip"
+             # Linux (x64 default)
+             url = "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip"
         
         await self._download_and_extract(url, "deno", progress_callback)
+
+    def _get_user_agent(self):
+        import sys
+        if sys.platform == 'win32':
+             return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        else:
+             return 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
     async def get_latest_ytdlp_version(self, url=None, timeout=30):
         """Fetches the latest version string from PyPI JSON API"""
@@ -121,7 +151,7 @@ class DependencyManager:
             try:
                 # Add headers to avoid some blocking
                 req = urllib.request.Request(url, headers={
-                     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                     'User-Agent': self._get_user_agent()
                 })
                 with urllib.request.urlopen(req, context=ctx, timeout=timeout) as response:
                     data = json.load(response)
@@ -142,7 +172,7 @@ class DependencyManager:
 
         def download_chunked():
             req = urllib.request.Request(url, headers={
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                'User-Agent': self._get_user_agent()
             })
             with urllib.request.urlopen(req, context=ctx) as response:
                 total_size = int(response.info().get('Content-Length', 0))
@@ -238,7 +268,7 @@ class DependencyManager:
 
         def download_chunked():
             req = urllib.request.Request(url, headers={
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                'User-Agent': self._get_user_agent()
             })
             with urllib.request.urlopen(req, context=ctx) as response:
                 total_size = int(response.info().get('Content-Length', 0))

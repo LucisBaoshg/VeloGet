@@ -1,0 +1,22 @@
+# Flet ignore file
+.git/
+.github/
+.vscode/
+.idea/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+build/
+dist/
+venv*/
+env*/
+.venv*/
+*.zip
+*.log
+requirements.txt.old
+run_gui.sh
+check_metadata.py
+debug_*.py
+test_*.py

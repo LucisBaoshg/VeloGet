@@ -24,7 +24,8 @@ class ConfigManager:
                 "download_dir": str(Path.home() / "Downloads"),
                 "last_browser": "chrome",
                 "last_profile": "Default",
-                "cookie_file": ""
+                "cookie_file": "",
+                "youtube_api_key": ""
             }
             self._save_data(default_config)
 
@@ -44,6 +45,13 @@ class ConfigManager:
 
     def save(self):
         self._save_data(self.config_data)
+
+    def get_youtube_api_key(self):
+        return self.config_data.get("youtube_api_key", "")
+
+    def set_youtube_api_key(self, key):
+        self.config_data["youtube_api_key"] = key
+        self.save()
 
     def get_js_engine_path(self):
         # 1. Check user config

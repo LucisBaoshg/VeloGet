@@ -1,63 +1,113 @@
-# 通用视频下载器 (yt-dlp GUI)
+# VeloGet - 极简且强大的视频下载器
 
-基于 [Toga](https://beeware.org/project/projects/libraries/toga/) 和 [yt-dlp](https://github.com/yt-dlp/yt-dlp) 开发的跨平台视频下载器 GUI。
+**VeloGet** 是一款基于 [Flet](https://flet.dev) (UI) 和 [yt-dlp](https://github.com/yt-dlp/yt-dlp) (内核) 开发的现代化跨平台视频下载工具。
 
-## 开发环境
+版本: **1.0.0**
 
-推荐使用 Python 3.10+。
+## ✨ 核心特性
 
+- **🚀 极度轻量**: 经过深度优化，App 体积仅约 200MB (DMG 约 138MB)。
+- **📦 开箱即用**: 内置 `FFmpeg` 和 `yt-dlp` 二进制文件，用户无需配置任何环境。
+- **📺 全能下载**: 支持 YouTube (含 4K/8K)、Bilibili、TikTok 等数千个网站。
+- **📊 频道分析**: 支持批量解析频道/播放列表，支持 YouTube Data API 加速，可导出详细 CSV 数据（文件名自动包含频道名称）。
+- **🔐 会员支持**:
+    - **智能 Profile 扫描**: 自动识别 Chrome/Edge/Firefox 的用户配置文件 (Profile)，无需手动查找路径。
+    - **Cookie 注入**: 支持读取本地浏览器 Cookie 或导入 `cookies.txt` 以下载会员视频。
+- **🔄 自动更新**: 内置内核更新功能，智能比对版本，随时保持最新的解析能力。
+
+## 🛠 开发环境
+
+推荐使用 Python 3.10+ (开发环境使用 3.12)。
+
+### 1. 初始化环境
 ```bash
 # 创建虚拟环境
 python3 -m venv venv-new
 source venv-new/bin/activate
 
 # 安装依赖
-pip install briefcase toga yt-dlp
+pip install -r requirements.txt
 ```
 
-## 运行应用
-
+### 2. 运行应用 (源码模式)
 ```bash
-# 源码运行
-briefcase dev
+python main.py
 ```
 
-## 打包 (macOS)
+## 📦 打包与发布
 
-本项目使用 [Briefcase](https://briefcase.readthedocs.io/) 进行打包。
-
-### 1. 打包并生成 .app
-
+### macOS
+使用一键构建脚本：
 ```bash
-briefcase package macOS app
+./build_release.sh
 ```
+产物位于 `dist/VeloGet-1.0.0.dmg`。
 
-### 2. 生成 DMG 安装包
+### Windows
+使用 PowerShell 构建脚本：
+```powershell
+.\build_release_win.ps1
+```
+**注意**: 
+1. 脚本会自动检查 `src/ytdlpgui/_internal/ffmpeg.exe`。如果不存在，构建出的应用将提示用户手动安装 FFmpeg，或你可以手动下载 `ffmpeg.exe` 放入该目录以集成到应用中。
+2. 产物位于 `dist/VeloGet-Windows-1.0.0.zip` (解压即用)。
 
-#### 方法 A: 本地测试 (Ad-hoc 签名)
-仅供本机测试使用，发给其他人可能会提示损坏。
-
+### 手动构建 (如果不使用脚本)
+必须使用 `--exclude` 参数防止体积膨胀：
 ```bash
-briefcase package macOS app --adhoc-sign
+# macOS
+flet build macos \
+    --project VeloGet \
+    --product VeloGet \
+    --org com.lucifer \
+    --copyright "Copyright (c) 2026 Lucifer" \
+    --exclude venv-new venv-final build dist .git .github
+
+# Windows
+flet build windows \
+    --project VeloGet \
+    --product VeloGet \
+    --org com.lucifer \
+    --copyright "Copyright (c) 2026 Lucifer" \
+    --exclude venv-new venv-final build dist .git .github
 ```
 
-#### 方法 B: 正式发布 (Apple 开发者签名)
-需要有效的 Apple 开发者账号和证书。
+## 💿 用户安装指南
 
-1. 列出可用的签名身份：
-   ```bash
-   security find-identity -p codesigning -v
-   ```
+### macOS
+由于应用未进行 Apple 开发者签名，用户安装时需要绕过安全限制：
+1.  双击 `.dmg` 文件，将 **VeloGet** 拖入 **Applications** 文件夹。
+2.  在“应用程序”中找到 VeloGet。
+3.  **右键点击** 图标 -> 选择 **“打开”**。
+4.  在弹出的警告框中点击 **“打开”** (Open Anyway)。
 
-2. 使用证书打包（替换 `YOUR_IDENTITY` 为证书名称或哈希，例如 "Developer ID Application: Tapcash Inc"）：
-   ```bash
-   briefcase package macOS app --identity "YOUR_IDENTITY"
-   ```
+### Windows
+1.  解压下载的 zip 包。
+2.  双击 `VeloGet.exe` 即可运行。
+3.  首次运行若提示缺少 FFmpeg，应用会自动尝试下载，或请按照提示安装。
 
-Briefcase 会自动处理签名和公证 (Notarization) 流程。如果公证成功，生成的 DMG 文件即可分发。
+### 常见问题 (FAQ)
 
-## 文件说明
+**Q: 提示 "Cookie 读取失败" 或 "could not find chrome cookies database"?**
+A: 
+- **macOS**: 请确保 VeloGet 已获得**完全磁盘访问权限**（系统设置 -> 隐私与安全）。
+- **Windows**: 请确保**完全退出** Chrome 浏览器（因为 Chrome 运行时会锁定数据库文件）。
+- 确保 Profile 选择正确。
 
-- `src/ytdlpgui`: 源代码目录
-- `pyproject.toml`: Briefcase 项目配置文件
-- `dist/`: 打包输出目录
+**Q: Windows 下提示 "解密失败" (Decryption failed)?**
+A: Windows 的安全机制 (DPAPI) 限制了第三方应用读取 Chrome Cookie。
+建议：
+1. 使用 **Firefox** 浏览器 (VeloGet 对 Firefox 的支持更好)。
+2. 或手动导出 `cookies.txt` 并要在设置中加载。
+
+## 📂 项目结构
+
+- `src/ytdlpgui`: 源代码根目录
+  - `_internal`: 内置二进制文件 (ffmpeg, yt-dlp)
+  - `core`: 核心业务逻辑 (下载、分析、依赖管理、Profile扫描)
+  - `ui_flet`: Flet UI 界面代码
+    - `views`: 各个页面视图 (下载器、分析器、设置)
+- `main.py`: 应用启动入口
+- `build_release.sh`: 自动化构建脚本
+- `requirements.txt`: 生产环境依赖
+- `AI_CONTEXT.md`: AI 辅助开发上下文记录

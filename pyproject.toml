@@ -1,79 +1,17 @@
-# briefcase 配置文件 (精简版，仅支持 macOS)
-
-[tool.briefcase]
-project_name = "yt-dlp GUI"
-bundle = "com.lucifer"
-version = "0.1.0"
-url = "https://lucifer.com/ytdlpgui"
-license.file = "LICENSE"
-author = "lucifer"
-author_email = "mr.lucis@gmail.com"
-
-######################################################################
-# App-specific options
-######################################################################
-[tool.briefcase.app.ytdlpgui]
-formal_name = "VeloGet"
-description = "VeloGet - 您的极简视频下载器"
-
-# 源代码包位于 src/ 目录下
-sources = [
-    "src/ytdlpgui",
+[project]
+name = "VeloGet"
+version = "1.0.0"
+description = "VeloGet - 极简且强大的视频下载器"
+authors = [
+    { name = "Lucifer", email = "mr.lucis@gmail.com" }
 ]
-entry_point = "ytdlpgui.main:main"
-
-# 我们不在通用区域定义依赖，因为我们只关心一个平台
-requires = []
-
-# 测试相关的配置（可以保留）
-test_sources = [
-    "tests",
-]
-test_requires = [
-    "pytest",
+requires-python = ">=3.10"
+dependencies = [
+    "flet>=0.80.5",
+    "yt-dlp[default]>=2025.1.0",
 ]
 
-######################################################################
-# macOS 专属配置 (我们所有的配置都集中在这里)
-######################################################################
-[tool.briefcase.app.ytdlpgui.macOS]
-requires = [
-    "toga>=0.4.0",
-    "yt-dlp[default]", 
-    "std-nslog~=1.0.3", 
-]
-
-# 图标路径 (相对于项目根目录)
-icon = "src/ytdlpgui/resources/ytdlpgui"
-
-# 构建通用二进制文件，以同时支持 Apple Silicon 和 Intel Mac
-universal_build = false
-
-# PySide6 要求最低的 macOS 版本
-min_os_version = "12.0"
-
-
-######################################################################
-# 禁用所有其他平台
-######################################################################
-[tool.briefcase.app.ytdlpgui.linux]
-supported = false
-
-# Windows configuration
-[tool.briefcase.app.ytdlpgui.windows]
-requires = [
-    "toga",
-    "yt-dlp[default]",
-    "pycryptodomex",
-]
-description = "VeloGet - Your Minimalist Video Downloader"
-icon = "src/ytdlpgui/resources/ytdlpgui"
-
-[tool.briefcase.app.ytdlpgui.iOS]
-supported = false
-
-[tool.briefcase.app.ytdlpgui.android]
-supported = false
-
-[tool.briefcase.app.ytdlpgui.web]
-supported = false
+[tool.flet]
+product = "VeloGet"
+org = "com.lucifer"
+copyright = "Copyright (c) 2026 Lucifer"

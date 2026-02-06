@@ -46,7 +46,13 @@ class YtDlpWorker:
         
         local_bin = str(self.deps.bin_dir)
         internal_bin = str(self.deps.internal_bin_dir)
-        common_paths = [local_bin, internal_bin, "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+        
+        import sys
+        if sys.platform == 'win32':
+             common_paths = [local_bin, internal_bin]
+        else:
+             common_paths = [local_bin, internal_bin, "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+        
         current_path = os.environ.get("PATH", "")
         
         new_paths = []
@@ -80,6 +86,8 @@ class YtDlpWorker:
             'ignore_no_formats_error': True,
             # Use a generic format selection that shouldn't fail
             'format': 'best/bestvideo+bestaudio',
+            # Allow downloading remote components for challenge solving (e.g. n-sig)
+            'remote_components': {'ejs': 'github'},
         }
 
         cookie_file = self.config.get_cookie_file()
@@ -100,10 +108,17 @@ class YtDlpWorker:
             debug_print(f"Analyze Error: {err_msg}")
 
             if "could not copy chrome cookie database" in err_msg.lower():
-                return {
-                    "status": "error", 
-                    "error": "【浏览器被占用】\n\nWindows 下无法读取运行中的 Chrome Cookie。\n\n解决方案：\n1. 推荐：在上方切换为【Firefox】(无需关闭浏览器)\n2. 或者：完全退出 Chrome 后重试"
-                }
+                import sys
+                if sys.platform == 'darwin':
+                    return {
+                        "status": "error", 
+                        "error": "【Cookie 读取失败 (macOS)】\n\n原因：无法访问浏览器数据库。\n\n解决方案：\n1. ⚠️ 请授予 VeloGet '完全磁盘访问权限' (系统设置 -> 隐私与安全)\n2. 确保 Profile 选择正确 (尝试 'Default')\n3. 退出 Chrome 浏览器后重试"
+                    }
+                else:
+                    return {
+                        "status": "error", 
+                        "error": "【浏览器被占用】\n\nWindows 下无法读取运行中的 Chrome Cookie。\n\n解决方案：\n1. 完全退出 Chrome 浏览器\n2. 或在上方切换为【Firefox】"
+                    }
             if "failed to decrypt with dpapi" in err_msg.lower():
                 return {
                     "status": "error",
@@ -132,6 +147,10 @@ class YtDlpWorker:
     def _download_sync(self, url, format_id, browser, profile, on_log, on_progress):
         self._setup_env()
         
+        debug_print(f"Download Request: URL={url}, FormatID={format_id}")
+        debug_print(f"Browser Config: {browser} (Profile: {profile})")
+        debug_print(f"FFmpeg Detected: {self.deps.is_ffmpeg_installed()}")
+        
         download_path = Path(self.config.get_download_dir())
         download_path.mkdir(parents=True, exist_ok=True)
 
@@ -148,42 +167,38 @@ class YtDlpWorker:
                     pass
 
         ydl_opts = {
-            'logger': ProgressLogger(on_log),
+            'outtmpl': str(download_path / '%(title)s.%(ext)s'),
             'progress_hooks': [progress_hook],
-            'paths': {'home': str(download_path)},
-            'outtmpl': '%(title)s [%(id)s].%(ext)s',
-            'merge_output_format': 'mp4',
+            'logger': ProgressLogger(on_log),
+            # 'quiet': True, # Disable quiet to catch auth warnings in log
+            'no_warnings': False, # Enable warnings to see "Sign in" messages
             'ignoreconfig': True,
+            'remote_components': {'ejs': 'github'},
         }
 
         if format_id == "best":
             # Smart Fallback Logic
             if self.deps.is_ffmpeg_installed():
-                ydl_opts['format'] = "bv*+ba/b" # Best video+audio (Requires Merge)
+                ydl_opts['format'] = "bv+ba/b" # Best video+audio (Requires Merge)
             else:
                 ydl_opts['format'] = "best" # Best single file (No Merge) - usually 720p
+        elif format_id == "bestaudio":
+             ydl_opts['format'] = "bestaudio/best"
         else:
             # If specific format selected
-            base_fmt = f"{self.format_id}+bestaudio/best" if hasattr(self, 'format_id') else f"{format_id}+bestaudio/best"
+            # Use 'bestvideo+bestaudio' pattern merging with selected ID if possible
+            # But specific ID usually refers to video stream.
+            # We want: "Download video stream X + best audio stream Y"
+            # Format selector: "X+bestaudio"
+            # Fallback: "best" (in case merge fails)
+            base_fmt = f"{format_id}+bestaudio/best"
             
-            # If ffmpeg missing, we cannot do "+bestaudio" merge safely unless we know format_id is a complete file.
-            # But usually user selects a video-only stream from the table.
-            # If user selects a video-only stream and no ffmpeg -> it will download video only (no audio).
-            # We should probably warn user or fallback? 
-            # For now, let's respect the selection but log generic fallback if it fails?
-            # Actually, robust way:
             if self.deps.is_ffmpeg_installed():
                  ydl_opts['format'] = base_fmt
             else:
-                 # Without ffmpeg, we can't merge. 
-                 # If format_id represents a video-only stream, downloading it results in silent video.
-                 # If we force 'best', we ignore user selection.
-                 # Let's trust yt-dlp to try, but if it fails, it fails.
-                 # OR: we essentially force 'w' (worst)? No.
-                 # Let's keep strict selection but removing the merge intent if possible?
-                 # No, `format_id+bestaudio` IS a merge request.
-                 # So if no ffmpeg, we must strip `+bestaudio`
                  ydl_opts['format'] = format_id
+                 
+        debug_print(f"Yt-dlp Options Format: {ydl_opts.get('format')}")
 
         cookie_file = self.config.get_cookie_file()
         if cookie_file and os.path.exists(cookie_file):
@@ -207,10 +222,17 @@ class YtDlpWorker:
             
             # Check for specific known errors
             if "could not copy chrome cookie database" in err_msg.lower():
-                 return {
-                    "status": "error", 
-                    "error": "【浏览器被占用】\n\n无法读取 Chrome Cookie，因为浏览器正在运行。\n\n请尝试：\n1. 完全关闭 Chrome 浏览器\n2. 再次点击下载"
-                }
+                 import sys
+                 if sys.platform == 'darwin':
+                     return {
+                        "status": "error", 
+                        "error": "【Cookie 读取失败 (macOS)】\n\n原因：无法访问浏览器数据库。\n\n解决方案：\n1. ⚠️ 请授予 VeloGet '完全磁盘访问权限' (系统设置 -> 隐私与安全)\n2. 确保 Profile 选择正确\n3. 退出 Chrome 浏览器后重试"
+                    }
+                 else:
+                     return {
+                        "status": "error", 
+                        "error": "【浏览器被占用】\n\n无法读取 Chrome Cookie，因为浏览器正在运行。\n\n请尝试：\n1. 完全关闭 Chrome 浏览器\n2. 再次点击下载"
+                    }
             if "failed to decrypt with dpapi" in err_msg.lower():
                  return {
                     "status": "error",
@@ -231,3 +253,192 @@ class YtDlpWorker:
                     }
                 
             return {"status": "error", "error": err_msg, "verification_required": is_verification}
+
+    async def analyze_channel(self, url, browser, profile=None):
+        return await asyncio.to_thread(self._analyze_channel_sync, url, browser, profile)
+
+    def _analyze_channel_sync(self, url, browser, profile):
+        self._setup_env()
+        
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'extract_flat': True, # Critical for channel analysis: don't download, just list
+            'ignoreconfig': True,
+            'ignore_no_formats_error': True,
+        }
+
+        cookie_file = self.config.get_cookie_file()
+        if cookie_file and os.path.exists(cookie_file):
+            ydl_opts['cookiefile'] = cookie_file
+            debug_print(f"Using Manual Cookie File: {cookie_file}")
+        elif profile:
+            ydl_opts['cookiesfrombrowser'] = (browser, profile, None, None)
+        else:
+            ydl_opts['cookiesfrombrowser'] = (browser, None, None, None)
+
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                # extract_flat=True makes extract_info return a dict with 'entries' which is a generator/list of videos
+                info = ydl.extract_info(url, download=False)
+                
+                # Check if result is just tabs
+                entries = list(info.get('entries', []))
+                debug_print(f"Channel Root Entries: {len(entries)}")
+                
+                # Heuristic: if small number of entries, it's likely a tabbed channel view
+                if len(entries) < 10: 
+                    tabs_to_scan = []
+                    
+                    # 1. Detect tabs from entries
+                    found_types = set()
+                    
+                    for e in entries:
+                        title = e.get('title', '')
+                        e_url = e.get('url', '')
+                        debug_print(f"Checking Tab: {title} | {e_url}")
+                        
+                        if not e_url: continue
+
+                        if e_url.endswith('/videos'):
+                            tabs_to_scan.append(('Video', e_url))
+                            found_types.add('Video')
+                        elif e_url.endswith('/shorts'):
+                            tabs_to_scan.append(('Short', e_url))
+                            found_types.add('Short')
+                        elif e_url.endswith('/streams'):
+                            tabs_to_scan.append(('Live', e_url))
+                            found_types.add('Live')
+                    
+                    # 2. Fallback: If standard tabs weren't found explicitly, try to construct them 
+                    # (only if we are fairly sure it's a channel url)
+                    base_url = url.rstrip('/')
+                    if 'Video' not in found_types:
+                        debug_print("Adding implicit /videos tab")
+                        tabs_to_scan.append(('Video', f"{base_url}/videos"))
+                    if 'Short' not in found_types:
+                        debug_print("Adding implicit /shorts tab")
+                        tabs_to_scan.append(('Short', f"{base_url}/shorts"))
+                    if 'Live' not in found_types:
+                        debug_print("Adding implicit /streams tab")
+                        tabs_to_scan.append(('Live', f"{base_url}/streams"))
+                        
+                    # 3. Fetch all
+                    all_entries = []
+                    if tabs_to_scan:
+                        debug_print(f"Scanning Tabs: {tabs_to_scan}")
+                        for v_type, tab_url in tabs_to_scan:
+                            try:
+                                debug_print(f"Fetching {v_type} from {tab_url}")
+                                tab_info = ydl.extract_info(tab_url, download=False)
+                                tab_entries = list(tab_info.get('entries', []))
+                                
+                                # Tag them
+                                for v in tab_entries:
+                                    v['original_type'] = v_type
+                                    
+                                debug_print(f"Found {len(tab_entries)} {v_type}s")
+                                all_entries.extend(tab_entries)
+                            except Exception as e:
+                                debug_print(f"Failed to fetch {v_type} tab: {e}")
+                    
+                    if all_entries:
+                        info['entries'] = all_entries
+                        debug_print(f"Total Combined Entries: {len(all_entries)}")
+                    else:
+                         debug_print("No entries found in recursive scan.")
+                         
+                return {"status": "success", "data": info}
+        except Exception as e:
+            err_msg = str(e)
+            debug_print(f"Channel Analyze Error: {err_msg}")
+            # Reuse error handling logic if needed, or stick to simple propagation
+            return {"status": "error", "error": err_msg}
+
+    async def enrich_with_api(self, video_list, api_key):
+        return await asyncio.to_thread(self._enrich_with_api_sync, video_list, api_key)
+        
+    def _enrich_with_api_sync(self, video_list, api_key):
+        """
+        Batch fetch metadata from YouTube Data API v3 videos endpoint.
+        Up to 50 IDs per request.
+        """
+        import requests
+        
+        if not video_list or not api_key:
+            return video_list
+
+        base_url = "https://www.googleapis.com/youtube/v3/videos"
+        enriched_list = []
+        
+        # Create a map for quick lookup and preservation of other data
+        # Only enrich items that have an ID
+        id_map = {v.get('id'): v for v in video_list if v.get('id')}
+        all_ids = list(id_map.keys())
+        
+        # Chunk IDs into batches of 50
+        chunks = [all_ids[i:i + 50] for i in range(0, len(all_ids), 50)]
+        debug_print(f"Enriching {len(all_ids)} videos via API in {len(chunks)} batches...")
+        
+        for i, chunk in enumerate(chunks):
+            try:
+                ids_str = ",".join(chunk)
+                params = {
+                    'part': 'snippet,contentDetails,statistics',
+                    'id': ids_str,
+                    'key': api_key
+                }
+                resp = requests.get(base_url, params=params, timeout=10)
+                data = resp.json()
+                
+                if 'items' in data:
+                    for item in data['items']:
+                        vid = item.get('id')
+                        if vid in id_map:
+                            snippet = item.get('snippet', {})
+                            stats = item.get('statistics', {})
+                            content = item.get('contentDetails', {})
+                            
+                            # Merge API data into existing dict
+                            v_data = id_map[vid]
+                            v_data['title'] = snippet.get('title', v_data.get('title'))
+                            # Date: 2023-01-01T12:00:00Z -> 20230101 (to match yt-dlp format mostly, or keep ISO?)
+                            # Let's keep raw ISO for app to parse, or convert to YYYYMMDD?
+                            # App expects 'upload_date' as YYYYMMDD string usually from yt-dlp.
+                            # API gives ISO. Let's provide both or standardise.
+                            # Let's simple keep standard ISO in a new field 'upload_date_iso' or override 'upload_date' if we parse it.
+                            # Standard yt-dlp 'upload_date' is '20230101'.
+                            pub_at = snippet.get('publishedAt', '')
+                            if pub_at:
+                                v_data['upload_date'] = pub_at.replace('-', '').replace(':', '').split('T')[0]
+                            
+                            # Duration: PT1M30S -> seconds?
+                            # yt-dlp gives seconds (int). 
+                            # Parsing ISO8601 duration is annoying without isodate lib.
+                            # Simple regex or keeping as string?
+                            # App logic: if isinstance(raw_dur, (int, float)): ... else: duration = str(raw_dur)
+                            # So we can leave it as ISO string if we handle it in App, OR parse it.
+                            # Let's parse simply if possible, or just pass 'duration_iso'.
+                            v_data['duration'] = self._parse_iso_duration(content.get('duration', ''))
+                            
+                            v_data['view_count'] = stats.get('viewCount', v_data.get('view_count'))
+                            v_data['like_count'] = stats.get('likeCount', 0)
+                            v_data['comment_count'] = stats.get('commentCount', 0)
+                            v_data['description'] = snippet.get('description', '')
+                            v_data['tags'] = snippet.get('tags', [])
+                            
+            except Exception as e:
+                debug_print(f"API Batch {i} failed: {e}")
+                
+        return list(id_map.values())
+
+    def _parse_iso_duration(self, duration_str):
+        """Simple ISO 8601 duration parser (PT1H2M10S -> seconds)"""
+        import re
+        if not duration_str: return 0
+        match = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)?S)?', duration_str)
+        if not match: return 0
+        h = int(match.group(1) or 0)
+        m = int(match.group(2) or 0)
+        s = int(match.group(3) or 0)
+        return h * 3600 + m * 60 + s
