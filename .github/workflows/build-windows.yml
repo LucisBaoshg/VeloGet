@@ -46,7 +46,7 @@ jobs:
       env:
         PYTHONIOENCODING: utf-8
       run: |
-        flet build windows --project VeloGet --product VeloGet --org com.lucifer --copyright "Copyright (c) 2026 Lucifer" --exclude venv-new venv-final build dist .git .github
+        flet build windows --yes --no-rich-output --project VeloGet --product VeloGet --org com.lucifer --copyright "Copyright (c) 2026 Lucifer" --exclude venv-new venv-final build dist .git .github
       
     - name: Get Version
       id: get_version
