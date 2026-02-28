@@ -253,6 +253,10 @@ class AnalyzerView(ft.Column):
         ]
         
         for v in entries:
+            # Format upload_date
+            raw_date = str(v.get('upload_date', 'N/A'))
+            fmt_date = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:]}" if len(raw_date) == 8 and raw_date.isdigit() else raw_date
+            
             # Format duration
             dur = v.get('duration') or 0
             m, s = divmod(int(dur), 60)
@@ -262,7 +266,7 @@ class AnalyzerView(ft.Column):
             self.data_table.rows.append(
                 ft.DataRow(cells=[
                     ft.DataCell(ft.Text(v.get('title', 'N/A'), width=300, no_wrap=True, tooltip=v.get('title'))),
-                    ft.DataCell(ft.Text(str(v.get('upload_date', 'N/A')))),
+                    ft.DataCell(ft.Text(fmt_date)),
                     ft.DataCell(ft.Text(str(v.get('view_count', 0)))),
                     ft.DataCell(ft.Text(str(v.get('like_count', 0)))),
                     ft.DataCell(ft.Text(dur_str)),
@@ -323,13 +327,17 @@ class AnalyzerView(ft.Column):
                     # However, to match previous "Duration" column logic, maybe text.
                     # I will stick to Raw Seconds or ISO string. Let's use Seconds.
                     
+                    # Format upload_date for Excel
+                    raw_date = str(v.get('upload_date', ''))
+                    fmt_date = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:]}" if len(raw_date) == 8 and raw_date.isdigit() else raw_date
+
                     # Tags list to string
                     tags = v.get('tags') or []
                     tags_str = ",".join(tags) if isinstance(tags, list) else str(tags)
                     
                     writer.writerow([
                         v.get('title'),
-                        v.get('upload_date'),
+                        fmt_date,
                         v.get('view_count'),
                         v.get('like_count', 0),
                         v.get('comment_count', 0),

@@ -98,3 +98,17 @@ class ConfigManager:
     def set_cookie_file(self, path):
         self.config_data["cookie_file"] = path
         self.save()
+
+    def get_youtube_api_key(self):
+        return self.config_data.get("youtube_api_key", "")
+
+    def set_youtube_api_key(self, key):
+        self.config_data["youtube_api_key"] = key
+        self.save()
+
+    def get_js_engine_path(self):
+        return self.config_data.get("js_engine_path", "")
+
+    def set_js_engine_path(self, path):
+        self.config_data["js_engine_path"] = path
+        self.save()

@@ -2,6 +2,7 @@ import flet as ft
 import os
 from .ui_flet.views.downloader import DownloaderView
 from .ui_flet.views.analyzer import AnalyzerView
+from .ui_flet.views.splitter import SplitterView
 from .ui_flet.views.settings import SettingsView
 from .config import ConfigManager
 from .core.worker import YtDlpWorker
@@ -23,10 +24,23 @@ class VeloGetApp:
         page.window.width = 1400
         page.window.height = 950
         page.window.min_width = 950
+
+        # Handle Drag and Drop
+        page.on_file_drop = self.on_file_drop
         
         # Content Area
+        from .core.utils import debug_print
+        debug_print("DEBUG: Initializing Views...")
+        
         self.downloader_view = DownloaderView(self)
         self.analyzer_view = AnalyzerView(self)
+        try:
+            self.splitter_view = SplitterView(self)
+        except Exception as e:
+            debug_print(f"CRITICAL: Failed to create SplitterView: {e}")
+            # Fallback
+            self.splitter_view = ft.Text(f"Splitter View Load Error: {e}")
+            
         self.settings_view = SettingsView(self)
 
         
@@ -47,6 +61,11 @@ class VeloGetApp:
                     icon=ft.Icons.ANALYTICS, 
                     selected_icon=ft.Icons.ANALYTICS, 
                     label="频道分析"
+                ),
+                ft.NavigationRailDestination(
+                    icon=ft.Icons.CUT, 
+                    selected_icon=ft.Icons.CUT, 
+                    label="视频切割"
                 ),
                 ft.NavigationRailDestination(
                     icon=ft.Icons.SETTINGS, 
@@ -87,11 +106,19 @@ class VeloGetApp:
         if index == 1:
             content = self.analyzer_view
         elif index == 2:
+            content = self.splitter_view
+        elif index == 3:
             content = self.settings_view
             
         # Robust update using direct reference
         self.content_container.content = content
         self.content_container.update()
+
+    def on_file_drop(self, e):
+        # Route file drop to active view if it supports it
+        # Index 2 is Splitter
+        if self.rail.selected_index == 2:
+             self.splitter_view.handle_file_drop(e)
 
 def run():
     import sys

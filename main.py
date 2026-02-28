@@ -31,9 +31,13 @@ def exception_handler(exc_type, exc_value, exc_traceback):
 sys.excepthook = exception_handler
 
 # Redirect standard streams if frozen (packaged)
-if getattr(sys, 'frozen', False):
-    sys.stdout = open(log_file, "a", encoding="utf-8", buffering=1)
-    sys.stderr = sys.stdout
+# if getattr(sys, 'frozen', False):
+#     sys.stdout = open(log_file, "a", encoding="utf-8", buffering=1)
+#     sys.stderr = sys.stdout
+
+# ALWAYS redirect for debugging now
+sys.stdout = open(log_file, "a", encoding="utf-8", buffering=1)
+sys.stderr = sys.stdout
 
 log_message("Application Starting...")
 log_message(f"CWD: {os.getcwd()}")

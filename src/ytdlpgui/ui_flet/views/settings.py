@@ -25,6 +25,15 @@ class SettingsView(ft.Column):
         pass
 
     def init_ui(self):
+        # Create persistent pickers - REMOVED for imperative API
+        # self.dir_picker = ft.FilePicker()
+        # self.dir_picker.on_result = self.on_dir_picked
+        # self.cookie_picker = ft.FilePicker()
+        # self.cookie_picker.on_result = self.on_cookie_picked
+        
+        # Add them to controls so they are mounted
+        # self.controls.extend([self.dir_picker, self.cookie_picker])
+        
         self.controls.append(ft.Text("系统设置", size=28, weight=ft.FontWeight.BOLD))
         
         # 1. General Settings
@@ -155,8 +164,6 @@ class SettingsView(ft.Column):
         return ff, deno
 
     async def select_dir(self, e):
-        # New API style for Flet >= 0.80.0
-        # No overlay needed, just await the result
         path = await ft.FilePicker().get_directory_path()
         if path:
             self.config.set_download_dir(path)
@@ -164,9 +171,8 @@ class SettingsView(ft.Column):
             self.dir_input.update()
 
     async def select_cookie(self, e):
-        # New API style
         files = await ft.FilePicker().pick_files(allow_multiple=False, allowed_extensions=["txt"])
-        if files:
+        if files and len(files) > 0:
             path = files[0].path
             self.config.set_cookie_file(path)
             self.cookie_input.value = path
