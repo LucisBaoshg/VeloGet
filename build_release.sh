@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # Configuration
 APP_NAME="VeloGet"
@@ -57,8 +57,16 @@ VOL_NAME="${APP_NAME} Installer"
 IN_APP_ARCHIVE="${DIST_DIR}/${APP_ID}-${VERSION}-macos-${ARCH}.app.tar.gz"
 
 if [ ! -d "$APP_PATH" ]; then
-    echo "Error: App bundle not found at $APP_PATH"
-    exit 1
+    ALT_APP_PATH=$(find "$BUILD_DIR" -maxdepth 3 -type d -name "${APP_NAME}.app" -print -quit || true)
+    if [ -n "${ALT_APP_PATH:-}" ]; then
+        APP_PATH="$ALT_APP_PATH"
+        echo "Resolved app bundle path dynamically: $APP_PATH"
+    else
+        echo "Error: App bundle not found at $APP_PATH"
+        echo "Available build outputs:"
+        find "$BUILD_DIR" -maxdepth 3 -print || true
+        exit 1
+    fi
 fi
 
 echo -e "${BLUE}Creating DMG package...${NC}"
@@ -88,7 +96,8 @@ hdiutil create \
 rm -rf "$DMG_TMP"
 
 echo -e "${BLUE}Creating in-app update archive...${NC}"
-tar -C "$BUILD_DIR" -czf "$IN_APP_ARCHIVE" "${APP_NAME}.app"
+APP_PARENT_DIR=$(dirname "$APP_PATH")
+tar -C "$APP_PARENT_DIR" -czf "$IN_APP_ARCHIVE" "${APP_NAME}.app"
 
 echo -e "${GREEN}=== Build Complete! ===${NC}"
 echo -e "DMG Package: ${DMG_PATH}"

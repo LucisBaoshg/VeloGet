@@ -1,5 +1,6 @@
 # Windows Build Script for VeloGet
 $ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
 
 $APP_NAME = "VeloGet"
 $APP_ID = "veloget"
@@ -60,16 +61,35 @@ flet build windows `
 
 # 5. Package (Zip)
 $TARGET_BUILD = Join-Path $BUILD_DIR "windows"
+if (-not (Test-Path $TARGET_BUILD)) {
+    Write-Warning "Expected build output directory not found: $TARGET_BUILD"
+    Write-Host "Current build tree:" -ForegroundColor Yellow
+    if (Test-Path $BUILD_DIR) {
+        Get-ChildItem -Path $BUILD_DIR -Recurse | Select-Object FullName
+    }
+}
+
+$ResolvedBuild = $null
 if (Test-Path $TARGET_BUILD) {
+    $ResolvedBuild = $TARGET_BUILD
+} else {
+    $ExeCandidate = Get-ChildItem -Path $BUILD_DIR -Recurse -Filter "VeloGet.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($ExeCandidate) {
+        $ResolvedBuild = $ExeCandidate.Directory.FullName
+        Write-Host "Resolved build output dynamically: $ResolvedBuild" -ForegroundColor Yellow
+    }
+}
+
+if ($ResolvedBuild) {
     $ZIP_NAME = "$APP_ID-$VERSION-windows-$ARCH.zip"
     $ZIP_PATH = Join-Path $DIST_DIR $ZIP_NAME
     $IN_APP_NAME = "$APP_ID-$VERSION-windows-$ARCH.app.tar.gz"
     $IN_APP_PATH = Join-Path $DIST_DIR $IN_APP_NAME
     
     Write-Host "Creating Zip Package: $ZIP_PATH" -ForegroundColor Cyan
-    Compress-Archive -Path "$TARGET_BUILD\*" -DestinationPath $ZIP_PATH -Force
+    Compress-Archive -Path (Join-Path $ResolvedBuild "*") -DestinationPath $ZIP_PATH -Force
     Write-Host "Creating In-App Update Archive: $IN_APP_PATH" -ForegroundColor Cyan
-    tar -C $TARGET_BUILD -czf $IN_APP_PATH .
+    tar -C $ResolvedBuild -czf $IN_APP_PATH .
     
     Write-Host "=== Build Complete! ===" -ForegroundColor Green
     Write-Host "Output: $ZIP_PATH"
