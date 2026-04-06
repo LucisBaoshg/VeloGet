@@ -176,6 +176,10 @@ jobs:
           APP_ZIP_PATH="dist/veloget-${VERSION}-macos-${ARCH}.app.zip"
           APP_UPDATE_PATH="dist/veloget-${VERSION}-macos-${ARCH}.app.tar.gz"
 
+          # Some bundled Python wheels bring along CocoaPods metadata symlinks
+          # that are harmless at runtime but rejected by codesign bundle validation.
+          find "$APP_PATH" -type l -name ".pod" -print -delete
+
           codesign --force --deep --options runtime --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$APP_PATH"
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 

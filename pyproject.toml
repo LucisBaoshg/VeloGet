@@ -1,6 +1,6 @@
 [project]
 name = "VeloGet"
-version = "1.0.4"
+version = "1.0.5"
 description = "VeloGet - 极简且强大的视频下载器"
 authors = [
     { name = "Lucifer", email = "mr.lucis@gmail.com" }

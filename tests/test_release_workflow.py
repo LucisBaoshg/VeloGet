@@ -33,3 +33,9 @@ def test_release_workflow_notarizes_a_zip_archive_instead_of_raw_app_bundle():
     assert 'ditto -c -k --keepParent "$APP_PATH" "$APP_ZIP_PATH"' in workflow
     assert 'xcrun notarytool submit "$APP_ZIP_PATH" \\' in workflow
     assert 'xcrun notarytool submit "$APP_PATH" \\' not in workflow
+
+
+def test_release_workflow_removes_pod_symlinks_before_codesign():
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    assert 'find "$APP_PATH" -type l -name ".pod" -print -delete' in workflow
