@@ -24,3 +24,12 @@ def test_release_workflow_skips_apple_signing_when_secrets_are_missing():
     assert "APPLE_SIGNING_ENABLED=true" in workflow
     assert "APPLE_SIGNING_ENABLED=false" in workflow
     assert "steps.apple_signing.outputs.enabled == 'true'" in workflow
+
+
+def test_release_workflow_notarizes_a_zip_archive_instead_of_raw_app_bundle():
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    assert 'APP_ZIP_PATH="dist/veloget-${VERSION}-macos-${ARCH}.app.zip"' in workflow
+    assert 'ditto -c -k --keepParent "$APP_PATH" "$APP_ZIP_PATH"' in workflow
+    assert 'xcrun notarytool submit "$APP_ZIP_PATH" \\' in workflow
+    assert 'xcrun notarytool submit "$APP_PATH" \\' not in workflow

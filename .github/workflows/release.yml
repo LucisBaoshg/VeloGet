@@ -160,20 +160,36 @@ jobs:
           ARCH: ${{ steps.release_meta.outputs.arch }}
         run: |
           APP_PATH="build/macos/VeloGet.app"
+          if [ ! -d "$APP_PATH" ]; then
+            ALT_APP_PATH=$(find "build/macos" -maxdepth 3 -type d -name "VeloGet.app" -print -quit || true)
+            if [ -n "${ALT_APP_PATH:-}" ]; then
+              APP_PATH="$ALT_APP_PATH"
+              echo "Resolved app bundle path dynamically: $APP_PATH"
+            else
+              echo "Error: App bundle not found at build/macos/VeloGet.app"
+              find "build/macos" -maxdepth 3 -print || true
+              exit 1
+            fi
+          fi
+          APP_PARENT_DIR="$(dirname "$APP_PATH")"
           DMG_PATH="dist/veloget-${VERSION}-macos-${ARCH}.dmg"
+          APP_ZIP_PATH="dist/veloget-${VERSION}-macos-${ARCH}.app.zip"
           APP_UPDATE_PATH="dist/veloget-${VERSION}-macos-${ARCH}.app.tar.gz"
 
           codesign --force --deep --options runtime --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$APP_PATH"
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
-          xcrun notarytool submit "$APP_PATH" \
+          rm -f "$APP_ZIP_PATH"
+          ditto -c -k --keepParent "$APP_PATH" "$APP_ZIP_PATH"
+
+          xcrun notarytool submit "$APP_ZIP_PATH" \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_APP_SPECIFIC_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" \
             --wait
           xcrun stapler staple "$APP_PATH"
 
-          rm -f "$DMG_PATH" "$APP_UPDATE_PATH"
+          rm -f "$DMG_PATH" "$APP_ZIP_PATH" "$APP_UPDATE_PATH"
           DMG_TMP="$(mktemp -d)"
           rsync -a "$APP_PATH" "$DMG_TMP/"
           ln -s /Applications "$DMG_TMP/Applications"
@@ -184,7 +200,7 @@ jobs:
             "$DMG_PATH"
           rm -rf "$DMG_TMP"
 
-          tar -C "build/macos" -czf "$APP_UPDATE_PATH" "VeloGet.app"
+          tar -C "$APP_PARENT_DIR" -czf "$APP_UPDATE_PATH" "VeloGet.app"
 
           codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$DMG_PATH"
           xcrun notarytool submit "$DMG_PATH" \
