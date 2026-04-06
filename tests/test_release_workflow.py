@@ -40,5 +40,5 @@ def test_release_workflow_removes_pod_symlinks_before_codesign():
 
     assert 'find "$APP_PATH" -type l | while read -r link_path; do' in workflow
     assert 'link_target="$(readlink "$link_path")"' in workflow
-    assert 'resolved_target="$(python - "$link_path" "$link_target" <<\'PY\'' in workflow
+    assert "resolved_target=\"$(python -c 'from pathlib import Path; import sys;" in workflow
     assert 'Removing invalid symlink: $link_path -> $link_target' in workflow

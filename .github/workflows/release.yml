@@ -181,18 +181,7 @@ jobs:
           # Clean any broken or bundle-external symlinks before signing.
           find "$APP_PATH" -type l | while read -r link_path; do
             link_target="$(readlink "$link_path")"
-            resolved_target="$(python - "$link_path" "$link_target" <<'PY'
-from pathlib import Path
-import sys
-
-link_path = Path(sys.argv[1])
-link_target = sys.argv[2]
-candidate = Path(link_target)
-if not candidate.is_absolute():
-    candidate = (link_path.parent / candidate).resolve(strict=False)
-print(candidate)
-PY
-)"
+            resolved_target="$(python -c 'from pathlib import Path; import sys; link_path = Path(sys.argv[1]); link_target = sys.argv[2]; candidate = Path(link_target); candidate = candidate if candidate.is_absolute() else (link_path.parent / candidate).resolve(strict=False); print(candidate)' "$link_path" "$link_target")"
             if [ ! -e "$resolved_target" ]; then
               echo "Removing invalid symlink: $link_path -> $link_target"
               rm -f "$link_path"
