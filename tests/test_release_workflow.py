@@ -38,4 +38,7 @@ def test_release_workflow_notarizes_a_zip_archive_instead_of_raw_app_bundle():
 def test_release_workflow_removes_pod_symlinks_before_codesign():
     workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
 
-    assert 'find "$APP_PATH" -type l -name ".pod" -print -delete' in workflow
+    assert 'find "$APP_PATH" -type l | while read -r link_path; do' in workflow
+    assert 'link_target="$(readlink "$link_path")"' in workflow
+    assert 'resolved_target="$(python - "$link_path" "$link_target" <<\'PY\'' in workflow
+    assert 'Removing invalid symlink: $link_path -> $link_target' in workflow

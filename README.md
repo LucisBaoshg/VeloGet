@@ -2,7 +2,7 @@
 
 **VeloGet** 是一款基于 [Flet](https://flet.dev) (UI) 和 [yt-dlp](https://github.com/yt-dlp/yt-dlp) (内核) 开发的现代化跨平台视频下载工具。
 
-版本: **1.0.5**
+版本: **1.0.6**
 
 ## ✨ 核心特性
 
@@ -110,8 +110,8 @@ flet build windows \
 推荐使用 tag 发版：
 
 ```bash
-git tag v1.0.5
-git push origin v1.0.5
+git tag v1.0.6
+git push origin v1.0.6
 ```
 
 仓库中的 [`.github/workflows/release.yml`](/Volumes/Acer/Dev/ytdlpgui/.github/workflows/release.yml) 会：

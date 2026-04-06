@@ -176,9 +176,36 @@ jobs:
           APP_ZIP_PATH="dist/veloget-${VERSION}-macos-${ARCH}.app.zip"
           APP_UPDATE_PATH="dist/veloget-${VERSION}-macos-${ARCH}.app.tar.gz"
 
-          # Some bundled Python wheels bring along CocoaPods metadata symlinks
-          # that are harmless at runtime but rejected by codesign bundle validation.
-          find "$APP_PATH" -type l -name ".pod" -print -delete
+          # Some bundled Python wheels/frameworks include symlinks that are
+          # harmless at runtime but rejected by codesign bundle validation.
+          # Clean any broken or bundle-external symlinks before signing.
+          find "$APP_PATH" -type l | while read -r link_path; do
+            link_target="$(readlink "$link_path")"
+            resolved_target="$(python - "$link_path" "$link_target" <<'PY'
+from pathlib import Path
+import sys
+
+link_path = Path(sys.argv[1])
+link_target = sys.argv[2]
+candidate = Path(link_target)
+if not candidate.is_absolute():
+    candidate = (link_path.parent / candidate).resolve(strict=False)
+print(candidate)
+PY
+)"
+            if [ ! -e "$resolved_target" ]; then
+              echo "Removing invalid symlink: $link_path -> $link_target"
+              rm -f "$link_path"
+              continue
+            fi
+            case "$resolved_target" in
+              "$PWD"/*) ;;
+              *)
+                echo "Removing external symlink: $link_path -> $link_target"
+                rm -f "$link_path"
+                ;;
+            esac
+          done
 
           codesign --force --deep --options runtime --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$APP_PATH"
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
