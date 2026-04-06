@@ -92,8 +92,34 @@ jobs:
           Remove-Item -Path "ffmpeg.zip" -Force
           Remove-Item -Path "ffmpeg_temp" -Recurse -Force
 
-      - name: Import Apple signing certificate
+      - name: Detect Apple signing configuration
         if: runner.os == 'macOS'
+        id: apple_signing
+        shell: bash
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          if [ -n "${APPLE_CERTIFICATE_P12:-}" ] \
+            && [ -n "${APPLE_CERTIFICATE_PASSWORD:-}" ] \
+            && [ -n "${APPLE_SIGNING_IDENTITY:-}" ] \
+            && [ -n "${APPLE_TEAM_ID:-}" ] \
+            && [ -n "${APPLE_ID:-}" ] \
+            && [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "APPLE_SIGNING_ENABLED=true" >> "$GITHUB_ENV"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "APPLE_SIGNING_ENABLED=false" >> "$GITHUB_ENV"
+            echo "Apple signing secrets are incomplete; macOS artifacts will be built unsigned."
+          fi
+
+      - name: Import Apple signing certificate
+        if: runner.os == 'macOS' && steps.apple_signing.outputs.enabled == 'true'
         shell: bash
         env:
           APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
@@ -123,7 +149,7 @@ jobs:
         run: ${{ matrix.build_command }}
 
       - name: Sign, notarize and repackage macOS assets
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && steps.apple_signing.outputs.enabled == 'true'
         shell: bash
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -169,7 +195,7 @@ jobs:
           xcrun stapler staple "$DMG_PATH"
 
       - name: Clean up temporary keychain
-        if: always() && runner.os == 'macOS'
+        if: always() && runner.os == 'macOS' && steps.apple_signing.outputs.enabled == 'true'
         shell: bash
         run: |
           if [ -n "${APPLE_KEYCHAIN_PATH:-}" ] && [ -f "${APPLE_KEYCHAIN_PATH}" ]; then
