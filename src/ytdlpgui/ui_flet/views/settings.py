@@ -1,5 +1,6 @@
 import flet as ft
 import asyncio
+import os
 import yt_dlp
 
 class SettingsView(ft.Column):
@@ -9,6 +10,7 @@ class SettingsView(ft.Column):
         self.config = app_instance.config
         # We need worker to get deps manager
         self.deps = app_instance.worker.deps
+        self.app_updater = app_instance.app_updater
         
         self.expand = True
         self.scroll = ft.ScrollMode.AUTO
@@ -20,6 +22,7 @@ class SettingsView(ft.Column):
         # Initial checks
         if self.app.page:
              self.app.page.run_task(self.check_env)
+             self.app.page.run_task(self.refresh_app_update_status)
 
     def will_unmount(self):
         pass
@@ -110,7 +113,14 @@ class SettingsView(ft.Column):
         current_ver = yt_dlp.version.__version__
         self.version_text = ft.Text(f"当前内核版本: {current_ver}")
         self.update_btn = ft.FilledButton("检查更新", icon=ft.Icons.UPDATE, on_click=self.update_kernel)
-        
+        self.app_version_text = ft.Text(f"当前应用版本: {self.app_updater.current_version}")
+        self.app_update_status = ft.Text("应用更新状态：未检查", color=ft.Colors.GREY)
+        self.app_update_btn = ft.FilledButton(
+            "检查应用更新",
+            icon=ft.Icons.SYSTEM_UPDATE_ALT,
+            on_click=self.check_app_update,
+        )
+
         self.controls.append(
             ft.Container(
                 content=ft.Column([
@@ -118,7 +128,10 @@ class SettingsView(ft.Column):
                     ft.Divider(),
                     ft.Row([ft.Text("Deno引擎:", weight=ft.FontWeight.BOLD), self.deno_status, self.deno_btn], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                     ft.Divider(),
-                    ft.Row([self.version_text, self.update_btn], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+                    ft.Row([self.version_text, self.update_btn], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                    ft.Divider(),
+                    ft.Row([self.app_version_text, self.app_update_btn], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                    self.app_update_status,
                 ]),
                 padding=15,
                 bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
@@ -187,6 +200,11 @@ class SettingsView(ft.Column):
         # Use show_dialog as per SnackBar docstring for this version
         self.app.page.show_dialog(ft.SnackBar(content=ft.Text(message)))
 
+    def _set_app_update_status(self, message, color=ft.Colors.GREY):
+        self.app_update_status.value = f"应用更新状态：{message}"
+        self.app_update_status.color = color
+        self.app_update_status.update()
+
     async def install_component(self, name, func):
         self._show_snack(f"开始安装 {name}...")
         try:
@@ -226,3 +244,87 @@ class SettingsView(ft.Column):
         self.update_btn.disabled = False
         self.update_btn.text = "检查更新"
         self.update()
+
+    async def refresh_app_update_status(self):
+        metadata = self.app.available_app_update
+        if metadata and self.app_updater.is_update_available(metadata):
+            self._set_app_update_status(f"发现新版本 {metadata.version}", ft.Colors.GREEN)
+
+    async def check_app_update(self, e):
+        self.app_update_btn.disabled = True
+        self.app_update_btn.text = "检查中..."
+        self.update()
+
+        try:
+            metadata = await asyncio.to_thread(self.app_updater.fetch_latest, "in_app_update")
+            self.app.available_app_update = metadata
+
+            if not self.app_updater.is_update_available(metadata):
+                self._set_app_update_status("当前已是最新版本", ft.Colors.GREEN)
+                self._show_snack(f"当前已是最新版本 ({self.app_updater.current_version})")
+                return
+
+            self._set_app_update_status(f"发现新版本 {metadata.version}", ft.Colors.GREEN)
+            self._show_app_update_dialog(metadata)
+        except Exception as ex:
+            self._set_app_update_status("检查失败", ft.Colors.RED)
+            self._show_snack(f"应用更新检查失败: {str(ex)}")
+        finally:
+            self.app_update_btn.disabled = False
+            self.app_update_btn.text = "检查应用更新"
+            self.update()
+
+    def _show_app_update_dialog(self, metadata):
+        notes = metadata.notes.strip() or "本版本未提供更新说明。"
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(f"发现新版本 {metadata.version}"),
+            content=ft.Column(
+                [
+                    ft.Text(f"发布时间：{metadata.published_at or '未知'}"),
+                    ft.Text(f"更新包：{metadata.filename}"),
+                    ft.Text("更新说明："),
+                    ft.Text(notes, selectable=True),
+                ],
+                tight=True,
+                spacing=10,
+            ),
+            actions=[
+                ft.TextButton("稍后", on_click=lambda e: self._close_dialog(dialog)),
+                ft.FilledButton(
+                    "下载并安装",
+                    on_click=lambda e: self._start_app_update_from_dialog(dialog, metadata),
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        self.app.page.show_dialog(dialog)
+
+    def _close_dialog(self, dialog):
+        if dialog.open:
+            dialog.open = False
+            self.app.page.update()
+
+    def _start_app_update_from_dialog(self, dialog, metadata):
+        self._close_dialog(dialog)
+        self.app.page.run_task(self.download_and_apply_app_update, metadata)
+
+    async def download_and_apply_app_update(self, metadata):
+        self.app_update_btn.disabled = True
+        self.app_update_btn.text = "下载更新中..."
+        self._set_app_update_status(f"正在下载 {metadata.version}", ft.Colors.PRIMARY)
+        self.update()
+
+        try:
+            pending = await asyncio.to_thread(self.app_updater.stage_in_app_update, metadata)
+            self._set_app_update_status(f"已准备安装 {metadata.version}", ft.Colors.GREEN)
+            self._show_snack("更新已下载完成，应用即将退出并安装")
+            await asyncio.sleep(1)
+            await asyncio.to_thread(self.app_updater.launch_pending_update, pending, os.getpid())
+            os._exit(0)
+        except Exception as ex:
+            self._set_app_update_status("安装失败", ft.Colors.RED)
+            self._show_snack(f"应用更新失败: {str(ex)}")
+            self.app_update_btn.disabled = False
+            self.app_update_btn.text = "检查应用更新"
+            self.update()

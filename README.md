@@ -2,7 +2,7 @@
 
 **VeloGet** 是一款基于 [Flet](https://flet.dev) (UI) 和 [yt-dlp](https://github.com/yt-dlp/yt-dlp) (内核) 开发的现代化跨平台视频下载工具。
 
-版本: **1.0.0**
+版本: **1.0.1**
 
 ## ✨ 核心特性
 
@@ -13,7 +13,7 @@
 - **🔐 会员支持**:
     - **智能 Profile 扫描**: 自动识别 Chrome/Edge/Firefox 的用户配置文件 (Profile)，无需手动查找路径。
     - **Cookie 注入**: 支持读取本地浏览器 Cookie 或导入 `cookies.txt` 以下载会员视频。
-- **🔄 自动更新**: 内置内核更新功能，智能比对版本，随时保持最新的解析能力。
+- **🔄 双通道更新**: 支持 `yt-dlp` 内核更新，也支持桌面应用通过内网 GitHub 镜像服务进行应用内更新。
 
 ## 🛠 开发环境
 
@@ -36,12 +36,38 @@ python main.py
 
 ## 📦 打包与发布
 
+项目现在使用 GitHub Release 作为统一发布源，并为内网镜像服务提供两类稳定产物：
+
+- `installer`: 安装包，供用户手动下载安装
+- `in_app_update`: 应用内更新包，供客户端下载后自动替换
+
+默认 `appId` 为 `veloget`，镜像服务地址为：
+
+- `http://tc-github-mirror.ite.tool4seller.com`
+
+发布产物命名规则：
+
+```text
+veloget-{version}-macos-{arch}.dmg
+veloget-{version}-macos-{arch}.app.tar.gz
+veloget-{version}-windows-x64.zip
+veloget-{version}-windows-x64.app.tar.gz
+```
+
+其中：
+
+- `.dmg` / `.zip` 对应 `kind=installer`
+- `.app.tar.gz` 对应 `kind=in_app_update`
+
 ### macOS
 使用一键构建脚本：
 ```bash
 ./build_release.sh
 ```
-产物位于 `dist/VeloGet-1.0.0.dmg`。
+产物位于 `dist/`，包含：
+
+- `veloget-{version}-macos-{arch}.dmg`
+- `veloget-{version}-macos-{arch}.app.tar.gz`
 
 ### Windows
 使用 PowerShell 构建脚本：
@@ -50,13 +76,18 @@ python main.py
 ```
 **注意**: 
 1. 脚本会自动检查 `src/ytdlpgui/_internal/ffmpeg.exe`。如果不存在，构建出的应用将提示用户手动安装 FFmpeg，或你可以手动下载 `ffmpeg.exe` 放入该目录以集成到应用中。
-2. 产物位于 `dist/VeloGet-Windows-1.0.0.zip` (解压即用)。
+2. 产物位于 `dist/`，包含：
+
+- `veloget-{version}-windows-x64.zip`
+- `veloget-{version}-windows-x64.app.tar.gz`
 
 ### 手动构建 (如果不使用脚本)
 必须使用 `--exclude` 参数防止体积膨胀：
 ```bash
 # macOS
 flet build macos \
+    --yes \
+    --no-rich-output \
     --project VeloGet \
     --product VeloGet \
     --org com.lucifer \
@@ -65,12 +96,65 @@ flet build macos \
 
 # Windows
 flet build windows \
+    --yes \
+    --no-rich-output \
     --project VeloGet \
     --product VeloGet \
     --org com.lucifer \
     --copyright "Copyright (c) 2026 Lucifer" \
     --exclude venv-new venv-final build dist .git .github
 ```
+
+## 🚀 GitHub Release 发版
+
+推荐使用 tag 发版：
+
+```bash
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+仓库中的 [`.github/workflows/release.yml`](/Volumes/Acer/Dev/ytdlpgui/.github/workflows/release.yml) 会：
+
+- 校验 tag 版本与 [`pyproject.toml`](/Volumes/Acer/Dev/ytdlpgui/pyproject.toml) 一致
+- 构建 macOS 与 Windows 产物
+- macOS 产物执行签名、公证与 stapling
+- 上传到 GitHub Release
+
+内网镜像服务再从 GitHub Release 同步这些最终发布产物。
+
+macOS Release 依赖以下 GitHub Actions secrets：
+
+- `APPLE_CERTIFICATE_P12`
+  填 base64 后的 `.p12` 内容。你提供的 `/Users/lucifer/Desktop/t4s-developer-id.p12.base64.txt` 就是这个 secret 的值。
+- `APPLE_CERTIFICATE_PASSWORD`
+- `APPLE_SIGNING_IDENTITY`
+- `APPLE_TEAM_ID`
+- `APPLE_ID`
+- `APPLE_APP_SPECIFIC_PASSWORD`
+
+## 🔄 应用更新接入
+
+桌面应用不再直接访问 GitHub Release，而是通过内网镜像服务查询和下载更新：
+
+```text
+GET /updates/veloget/latest?platform={platform}&arch={arch}&kind={kind}
+```
+
+当前应用已接入：
+
+- 启动时静默检查应用新版本
+- 设置页手动“检查应用更新”
+- 下载 `in_app_update` 包
+- 校验 `sha256`
+- 下载完成后退出当前进程并执行平台更新脚本
+
+当前约定：
+
+- macOS 使用 `macos` + `arm64/x64`
+- Windows 使用 `windows` + `x64`
+- 应用内更新默认请求 `kind=in_app_update`
+- 用户手动下载安装可请求 `kind=installer`
 
 ## 💿 用户安装指南
 

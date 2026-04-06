@@ -3,6 +3,7 @@ set -e
 
 # Configuration
 APP_NAME="VeloGet"
+APP_ID="veloget"
 PROJECT_DIR=$(pwd)
 BUILD_DIR="${PROJECT_DIR}/build/macos"
 DIST_DIR="${PROJECT_DIR}/dist"
@@ -16,14 +17,20 @@ NC='\033[0m' # No Color
 echo -e "${BLUE}=== Starting VeloGet Release Build ===${NC}"
 
 # 1. Environment Check
-if [ ! -f "$VENV_ACTIVATE" ]; then
-    echo "Error: Virtual environment not found at $VENV_ACTIVATE"
-    exit 1
+if [ -f "$VENV_ACTIVATE" ]; then
+    source "$VENV_ACTIVATE"
+else
+    echo "Warning: Virtual environment not found at $VENV_ACTIVATE, using current Python environment"
 fi
-
-source "$VENV_ACTIVATE"
 VERSION=$(python -c "import tomli; print(tomli.load(open('pyproject.toml', 'rb'))['project']['version'])" 2>/dev/null || grep 'version =' pyproject.toml | head -n 1 | cut -d '"' -f 2)
+RAW_ARCH=$(uname -m)
+if [ "$RAW_ARCH" = "arm64" ] || [ "$RAW_ARCH" = "aarch64" ]; then
+    ARCH="arm64"
+else
+    ARCH="x64"
+fi
 echo -e "${GREEN}Detected Version: ${VERSION}${NC}"
+echo -e "${GREEN}Detected Architecture: ${ARCH}${NC}"
 
 # 2. Cleanup
 echo -e "${BLUE}Cleaning up old builds...${NC}"
@@ -34,6 +41,8 @@ mkdir -p "$DIST_DIR"
 # 3. Build .app
 echo -e "${BLUE}Building macOS App Bundle...${NC}"
 flet build macos \
+    --yes \
+    --no-rich-output \
     --project "$APP_NAME" \
     --product "$APP_NAME" \
     --org com.lucifer \
@@ -42,9 +51,10 @@ flet build macos \
 
 # 4. Create DMG
 APP_PATH="${BUILD_DIR}/${APP_NAME}.app"
-DMG_NAME="${APP_NAME}-${VERSION}.dmg"
+DMG_NAME="${APP_ID}-${VERSION}-macos-${ARCH}.dmg"
 DMG_PATH="${DIST_DIR}/${DMG_NAME}"
 VOL_NAME="${APP_NAME} Installer"
+IN_APP_ARCHIVE="${DIST_DIR}/${APP_ID}-${VERSION}-macos-${ARCH}.app.tar.gz"
 
 if [ ! -d "$APP_PATH" ]; then
     echo "Error: App bundle not found at $APP_PATH"
@@ -77,6 +87,10 @@ hdiutil create \
 # Cleanup temp
 rm -rf "$DMG_TMP"
 
+echo -e "${BLUE}Creating in-app update archive...${NC}"
+tar -C "$BUILD_DIR" -czf "$IN_APP_ARCHIVE" "${APP_NAME}.app"
+
 echo -e "${GREEN}=== Build Complete! ===${NC}"
 echo -e "DMG Package: ${DMG_PATH}"
+echo -e "In-App Update: ${IN_APP_ARCHIVE}"
 echo -e "Size: $(du -sh "$DMG_PATH" | cut -f1)"

@@ -1,9 +1,7 @@
-name: Build Windows App
+name: Build Windows App (Manual)
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
 
 jobs:
   build:

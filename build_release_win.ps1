@@ -2,6 +2,7 @@
 $ErrorActionPreference = "Stop"
 
 $APP_NAME = "VeloGet"
+$APP_ID = "veloget"
 $PROJECT_DIR = Get-Location
 $BUILD_DIR = Join-Path $PROJECT_DIR "build"
 $DIST_DIR = Join-Path $PROJECT_DIR "dist"
@@ -11,11 +12,11 @@ Write-Host "=== Starting VeloGet Release Build (Windows) ===" -ForegroundColor C
 
 # 1. Environment Check
 if (-not (Test-Path $VENV_ACTIVATE)) {
-    Write-Error "Virtual environment not found at $VENV_ACTIVATE"
+    Write-Warning "Virtual environment not found at $VENV_ACTIVATE, using current Python environment"
+} else {
+    # Activate Venv
+    . $VENV_ACTIVATE
 }
-
-# Activate Venv
-. $VENV_ACTIVATE
 
 # Get Version
 $VERSION = python -c "import tomli; print(tomli.load(open('pyproject.toml', 'rb'))['project']['version'])" 2>$null
@@ -24,6 +25,8 @@ if (-not $VERSION) {
     $VERSION = (Get-Content pyproject.toml | Select-String 'version = "').ToString().Split('"')[1]
 }
 Write-Host "Detected Version: $VERSION" -ForegroundColor Green
+$ARCH = "x64"
+Write-Host "Detected Architecture: $ARCH" -ForegroundColor Green
 
 # 2. Cleanup
 Write-Host "Cleaning up old builds..." -ForegroundColor Cyan
@@ -47,6 +50,8 @@ if (-not (Test-Path $FFMPEG_EXE)) {
 Write-Host "Building Windows App..." -ForegroundColor Cyan
 # exclude venv and build artifacts
 flet build windows `
+    --yes `
+    --no-rich-output `
     --project "$APP_NAME" `
     --product "$APP_NAME" `
     --org "com.lucifer" `
@@ -56,14 +61,19 @@ flet build windows `
 # 5. Package (Zip)
 $TARGET_BUILD = Join-Path $BUILD_DIR "windows"
 if (Test-Path $TARGET_BUILD) {
-    $ZIP_NAME = "$APP_NAME-Windows-$VERSION.zip"
+    $ZIP_NAME = "$APP_ID-$VERSION-windows-$ARCH.zip"
     $ZIP_PATH = Join-Path $DIST_DIR $ZIP_NAME
+    $IN_APP_NAME = "$APP_ID-$VERSION-windows-$ARCH.app.tar.gz"
+    $IN_APP_PATH = Join-Path $DIST_DIR $IN_APP_NAME
     
     Write-Host "Creating Zip Package: $ZIP_PATH" -ForegroundColor Cyan
     Compress-Archive -Path "$TARGET_BUILD\*" -DestinationPath $ZIP_PATH -Force
+    Write-Host "Creating In-App Update Archive: $IN_APP_PATH" -ForegroundColor Cyan
+    tar -C $TARGET_BUILD -czf $IN_APP_PATH .
     
     Write-Host "=== Build Complete! ===" -ForegroundColor Green
     Write-Host "Output: $ZIP_PATH"
+    Write-Host "Output: $IN_APP_PATH"
 } else {
     Write-Error "Build failed? Output directory not found."
 }

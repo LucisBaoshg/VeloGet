@@ -1,16 +1,20 @@
 import flet as ft
 import os
+import asyncio
 from .ui_flet.views.downloader import DownloaderView
 from .ui_flet.views.analyzer import AnalyzerView
 from .ui_flet.views.splitter import SplitterView
 from .ui_flet.views.settings import SettingsView
 from .config import ConfigManager
+from .core.app_update import AppUpdateManager
 from .core.worker import YtDlpWorker
 
 class VeloGetApp:
     def __init__(self):
         self.config = ConfigManager()
+        self.app_updater = AppUpdateManager(self.config.config_dir)
         self.worker = YtDlpWorker()
+        self.available_app_update = None
 
 
     async def main(self, page: ft.Page):
@@ -99,6 +103,7 @@ class VeloGetApp:
         
         self.page.update()
         await self.page.window.center()
+        self.page.run_task(self.check_app_update_silently)
 
     def on_nav_change(self, e):
         index = e.control.selected_index
@@ -119,6 +124,19 @@ class VeloGetApp:
         # Index 2 is Splitter
         if self.rail.selected_index == 2:
              self.splitter_view.handle_file_drop(e)
+
+    async def check_app_update_silently(self):
+        try:
+            metadata = await asyncio.to_thread(self.app_updater.fetch_latest, "in_app_update")
+        except Exception:
+            return
+
+        if self.app_updater.is_update_available(metadata):
+            self.available_app_update = metadata
+            if self.page:
+                self.page.show_dialog(
+                    ft.SnackBar(content=ft.Text(f"发现新版本 {metadata.version}，可前往系统设置更新"))
+                )
 
 def run():
     import sys
