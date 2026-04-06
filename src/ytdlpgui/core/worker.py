@@ -3,11 +3,12 @@ import os
 import json
 import asyncio
 from pathlib import Path
-import yt_dlp
 
 from ..config import ConfigManager
 from .utils import get_environ_with_js_engine, debug_print
 from .dependency import DependencyManager
+from .site_profiles import build_ydl_opts, detect_site
+from .ytdlp_cli import build_cli_command, run_json_command, run_download_command
 
 class ProgressLogger:
     def __init__(self, log_callback=None):
@@ -71,38 +72,78 @@ class YtDlpWorker:
             # but we made sure global PATH is also decent above.
             os.environ.update(get_environ_with_js_engine(js_path))
 
+    def _runtime_env(self):
+        env = os.environ.copy()
+        js_path = self.config.get_js_engine_path()
+        if js_path:
+            env.update(get_environ_with_js_engine(js_path))
+        return env
+
+    def _get_ytdlp_path(self):
+        path = self.deps.get_ytdlp_path()
+        if not path:
+            raise RuntimeError("yt-dlp 未安装，请先完成首次运行时依赖安装")
+        return path
+
+    def _build_cli_for_mode(
+        self,
+        *,
+        mode,
+        url,
+        browser,
+        profile,
+        cookie_file,
+        format_id=None,
+        download_path=None,
+        logger=None,
+        progress_hooks=None,
+    ):
+        opts = build_ydl_opts(
+            mode=mode,
+            url=url,
+            browser=browser,
+            profile=profile,
+            cookie_file=cookie_file,
+            format_id=format_id,
+            ffmpeg_installed=self.deps.is_ffmpeg_installed(),
+            download_path=download_path,
+            logger=logger,
+            progress_hooks=progress_hooks,
+        )
+        command = build_cli_command(
+            ytdlp_path=self._get_ytdlp_path(),
+            url=url,
+            mode=mode,
+            opts=opts,
+            ffmpeg_path=self.deps.get_ffmpeg_path(),
+        )
+        return opts, command
+
     async def analyze_url(self, url, browser, profile=None):
         # Run blocking analysis in a thread
         return await asyncio.to_thread(self._analyze_sync, url, browser, profile)
 
     def _analyze_sync(self, url, browser, profile):
         self._setup_env()
-        
-        ydl_opts = {
-            'quiet': True,
-            'no_warnings': True,
-            'extract_flat': False,
-            'ignoreconfig': True, # Ignore user's yt-dlp.conf
-            'ignore_no_formats_error': True,
-            # Use a generic format selection that shouldn't fail
-            'format': 'best/bestvideo+bestaudio',
-            # Allow downloading remote components for challenge solving (e.g. n-sig)
-            'remote_components': {'ejs': 'github'},
-        }
 
         cookie_file = self.config.get_cookie_file()
         if cookie_file and os.path.exists(cookie_file):
-            ydl_opts['cookiefile'] = cookie_file
             debug_print(f"Using Manual Cookie File: {cookie_file}")
-        elif profile:
-            ydl_opts['cookiesfrombrowser'] = (browser, profile, None, None)
         else:
-            ydl_opts['cookiesfrombrowser'] = (browser, None, None, None)
+            cookie_file = None
+
+        debug_print(f"Detected Site Profile: {detect_site(url)}")
+        _ydl_opts, command = self._build_cli_for_mode(
+            mode="analyze_video",
+            url=url,
+            browser=browser,
+            profile=profile,
+            cookie_file=cookie_file,
+        )
 
         try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=False)
-                return {"status": "success", "data": info}
+            info = run_json_command(command, env=self._runtime_env())
+            return {"status": "success", "data": info}
         except Exception as e:
             err_msg = str(e)
             debug_print(f"Analyze Error: {err_msg}")
@@ -166,52 +207,33 @@ class YtDlpWorker:
                 except:
                     pass
 
-        ydl_opts = {
-            'outtmpl': str(download_path / '%(title)s.%(ext)s'),
-            'progress_hooks': [progress_hook],
-            'logger': ProgressLogger(on_log),
-            # 'quiet': True, # Disable quiet to catch auth warnings in log
-            'no_warnings': False, # Enable warnings to see "Sign in" messages
-            'ignoreconfig': True,
-            'remote_components': {'ejs': 'github'},
-        }
-
-        if format_id == "best":
-            # Smart Fallback Logic
-            if self.deps.is_ffmpeg_installed():
-                ydl_opts['format'] = "bv+ba/b" # Best video+audio (Requires Merge)
-            else:
-                ydl_opts['format'] = "best" # Best single file (No Merge) - usually 720p
-        elif format_id == "bestaudio":
-             ydl_opts['format'] = "bestaudio/best"
-        else:
-            # If specific format selected
-            # Use 'bestvideo+bestaudio' pattern merging with selected ID if possible
-            # But specific ID usually refers to video stream.
-            # We want: "Download video stream X + best audio stream Y"
-            # Format selector: "X+bestaudio"
-            # Fallback: "best" (in case merge fails)
-            base_fmt = f"{format_id}+bestaudio/best"
-            
-            if self.deps.is_ffmpeg_installed():
-                 ydl_opts['format'] = base_fmt
-            else:
-                 ydl_opts['format'] = format_id
-                 
-        debug_print(f"Yt-dlp Options Format: {ydl_opts.get('format')}")
-
         cookie_file = self.config.get_cookie_file()
         if cookie_file and os.path.exists(cookie_file):
-            ydl_opts['cookiefile'] = cookie_file
             debug_print(f"Using Manual Cookie File: {cookie_file}")
-        elif profile:
-            ydl_opts['cookiesfrombrowser'] = (browser, profile, None, None)
         else:
-            ydl_opts['cookiesfrombrowser'] = (browser, None, None, None)
+            cookie_file = None
+
+        debug_print(f"Detected Site Profile: {detect_site(url)}")
+        ydl_opts, command = self._build_cli_for_mode(
+            mode="download_video",
+            url=url,
+            browser=browser,
+            profile=profile,
+            cookie_file=cookie_file,
+            format_id=format_id,
+            download_path=download_path,
+            logger=ProgressLogger(on_log),
+            progress_hooks=[progress_hook],
+        )
+        debug_print(f"Yt-dlp Options Format: {ydl_opts.get('format')}")
 
         try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
+            run_download_command(
+                command,
+                env=self._runtime_env(),
+                on_log=on_log,
+                on_progress=on_progress,
+            )
             return {"status": "success"}
         except Exception as e:
             err_msg = str(e)
@@ -259,96 +281,90 @@ class YtDlpWorker:
 
     def _analyze_channel_sync(self, url, browser, profile):
         self._setup_env()
-        
-        ydl_opts = {
-            'quiet': True,
-            'no_warnings': True,
-            'extract_flat': True, # Critical for channel analysis: don't download, just list
-            'ignoreconfig': True,
-            'ignore_no_formats_error': True,
-        }
 
         cookie_file = self.config.get_cookie_file()
         if cookie_file and os.path.exists(cookie_file):
-            ydl_opts['cookiefile'] = cookie_file
             debug_print(f"Using Manual Cookie File: {cookie_file}")
-        elif profile:
-            ydl_opts['cookiesfrombrowser'] = (browser, profile, None, None)
         else:
-            ydl_opts['cookiesfrombrowser'] = (browser, None, None, None)
+            cookie_file = None
+
+        debug_print(f"Detected Site Profile: {detect_site(url)}")
+        _ydl_opts, command = self._build_cli_for_mode(
+            mode="analyze_channel",
+            url=url,
+            browser=browser,
+            profile=profile,
+            cookie_file=cookie_file,
+        )
 
         try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                # extract_flat=True makes extract_info return a dict with 'entries' which is a generator/list of videos
-                info = ydl.extract_info(url, download=False)
-                
-                # Check if result is just tabs
-                entries = list(info.get('entries', []))
-                debug_print(f"Channel Root Entries: {len(entries)}")
-                
-                # Heuristic: if small number of entries, it's likely a tabbed channel view
-                if len(entries) < 10: 
-                    tabs_to_scan = []
-                    
-                    # 1. Detect tabs from entries
-                    found_types = set()
-                    
-                    for e in entries:
-                        title = e.get('title', '')
-                        e_url = e.get('url', '')
-                        debug_print(f"Checking Tab: {title} | {e_url}")
-                        
-                        if not e_url: continue
+            info = run_json_command(command, env=self._runtime_env())
 
-                        if e_url.endswith('/videos'):
-                            tabs_to_scan.append(('Video', e_url))
-                            found_types.add('Video')
-                        elif e_url.endswith('/shorts'):
-                            tabs_to_scan.append(('Short', e_url))
-                            found_types.add('Short')
-                        elif e_url.endswith('/streams'):
-                            tabs_to_scan.append(('Live', e_url))
-                            found_types.add('Live')
-                    
-                    # 2. Fallback: If standard tabs weren't found explicitly, try to construct them 
-                    # (only if we are fairly sure it's a channel url)
-                    base_url = url.rstrip('/')
-                    if 'Video' not in found_types:
-                        debug_print("Adding implicit /videos tab")
-                        tabs_to_scan.append(('Video', f"{base_url}/videos"))
-                    if 'Short' not in found_types:
-                        debug_print("Adding implicit /shorts tab")
-                        tabs_to_scan.append(('Short', f"{base_url}/shorts"))
-                    if 'Live' not in found_types:
-                        debug_print("Adding implicit /streams tab")
-                        tabs_to_scan.append(('Live', f"{base_url}/streams"))
-                        
-                    # 3. Fetch all
-                    all_entries = []
-                    if tabs_to_scan:
-                        debug_print(f"Scanning Tabs: {tabs_to_scan}")
-                        for v_type, tab_url in tabs_to_scan:
-                            try:
-                                debug_print(f"Fetching {v_type} from {tab_url}")
-                                tab_info = ydl.extract_info(tab_url, download=False)
-                                tab_entries = list(tab_info.get('entries', []))
-                                
-                                # Tag them
-                                for v in tab_entries:
-                                    v['original_type'] = v_type
-                                    
-                                debug_print(f"Found {len(tab_entries)} {v_type}s")
-                                all_entries.extend(tab_entries)
-                            except Exception as e:
-                                debug_print(f"Failed to fetch {v_type} tab: {e}")
-                    
-                    if all_entries:
-                        info['entries'] = all_entries
-                        debug_print(f"Total Combined Entries: {len(all_entries)}")
-                    else:
-                         debug_print("No entries found in recursive scan.")
-                         
-                return {"status": "success", "data": info}
+            entries = list(info.get('entries', []))
+            debug_print(f"Channel Root Entries: {len(entries)}")
+
+            if len(entries) < 10:
+                tabs_to_scan = []
+                found_types = set()
+
+                for entry in entries:
+                    title = entry.get('title', '')
+                    entry_url = entry.get('url', '')
+                    debug_print(f"Checking Tab: {title} | {entry_url}")
+
+                    if not entry_url:
+                        continue
+
+                    if entry_url.endswith('/videos'):
+                        tabs_to_scan.append(('Video', entry_url))
+                        found_types.add('Video')
+                    elif entry_url.endswith('/shorts'):
+                        tabs_to_scan.append(('Short', entry_url))
+                        found_types.add('Short')
+                    elif entry_url.endswith('/streams'):
+                        tabs_to_scan.append(('Live', entry_url))
+                        found_types.add('Live')
+
+                base_url = url.rstrip('/')
+                if 'Video' not in found_types:
+                    debug_print("Adding implicit /videos tab")
+                    tabs_to_scan.append(('Video', f"{base_url}/videos"))
+                if 'Short' not in found_types:
+                    debug_print("Adding implicit /shorts tab")
+                    tabs_to_scan.append(('Short', f"{base_url}/shorts"))
+                if 'Live' not in found_types:
+                    debug_print("Adding implicit /streams tab")
+                    tabs_to_scan.append(('Live', f"{base_url}/streams"))
+
+                all_entries = []
+                if tabs_to_scan:
+                    debug_print(f"Scanning Tabs: {tabs_to_scan}")
+                    for v_type, tab_url in tabs_to_scan:
+                        try:
+                            debug_print(f"Fetching {v_type} from {tab_url}")
+                            _tab_opts, tab_command = self._build_cli_for_mode(
+                                mode="analyze_channel",
+                                url=tab_url,
+                                browser=browser,
+                                profile=profile,
+                                cookie_file=cookie_file,
+                            )
+                            tab_info = run_json_command(tab_command, env=self._runtime_env())
+                            tab_entries = list(tab_info.get('entries', []))
+                            for video in tab_entries:
+                                video['original_type'] = v_type
+                            debug_print(f"Found {len(tab_entries)} {v_type}s")
+                            all_entries.extend(tab_entries)
+                        except Exception as e:
+                            debug_print(f"Failed to fetch {v_type} tab: {e}")
+
+                if all_entries:
+                    info['entries'] = all_entries
+                    debug_print(f"Total Combined Entries: {len(all_entries)}")
+                else:
+                    debug_print("No entries found in recursive scan.")
+
+            return {"status": "success", "data": info}
         except Exception as e:
             err_msg = str(e)
             debug_print(f"Channel Analyze Error: {err_msg}")

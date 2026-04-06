@@ -47,7 +47,7 @@ flet build macos \
     --product "$APP_NAME" \
     --org com.lucifer \
     --copyright "Copyright (c) 2026 Lucifer" \
-    --exclude venv-new venv-final build dist .git .github
+    --exclude venv-new venv-final build dist .git .github src/ytdlpgui/_internal
 
 # 4. Create DMG
 APP_PATH="${BUILD_DIR}/${APP_NAME}.app"

@@ -1,7 +1,6 @@
 import flet as ft
 import asyncio
 import os
-import yt_dlp
 
 class SettingsView(ft.Column):
     def __init__(self, app_instance):
@@ -104,15 +103,16 @@ class SettingsView(ft.Column):
         
         # Status indicators
         self.ffmpeg_status = ft.Text("检测中...", color=ft.Colors.GREY)
+        self.ytdlp_status = ft.Text("检测中...", color=ft.Colors.GREY)
         self.deno_status = ft.Text("检测中...", color=ft.Colors.GREY)
         
-        self.ffmpeg_btn = ft.OutlinedButton("安装 FFmpeg", on_click=lambda e: self.install_component("FFmpeg", self.deps.install_ffmpeg))
+        self.ffmpeg_btn = ft.OutlinedButton("安装 FFmpeg / FFprobe", on_click=lambda e: self.install_component("FFmpeg / FFprobe", self.deps.install_ffmpeg))
+        self.ytdlp_btn = ft.OutlinedButton("安装 yt-dlp", on_click=lambda e: self.install_component("yt-dlp", self.deps.install_ytdlp))
         self.deno_btn = ft.OutlinedButton("安装 Deno", on_click=lambda e: self.install_component("Deno", self.deps.install_deno))
         
         # Version
-        current_ver = yt_dlp.version.__version__
-        self.version_text = ft.Text(f"当前内核版本: {current_ver}")
-        self.update_btn = ft.FilledButton("检查更新", icon=ft.Icons.UPDATE, on_click=self.update_kernel)
+        self.version_text = ft.Text("当前内核版本: 检测中...")
+        self.update_btn = ft.FilledButton("更新 yt-dlp", icon=ft.Icons.UPDATE, on_click=self.update_kernel)
         self.app_version_text = ft.Text(f"当前应用版本: {self.app_updater.current_version}")
         self.app_update_status = ft.Text("应用更新状态：未检查", color=ft.Colors.GREY)
         self.app_update_btn = ft.FilledButton(
@@ -125,6 +125,8 @@ class SettingsView(ft.Column):
             ft.Container(
                 content=ft.Column([
                     ft.Row([ft.Text("FFmpeg:", weight=ft.FontWeight.BOLD), self.ffmpeg_status, self.ffmpeg_btn], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                    ft.Divider(),
+                    ft.Row([ft.Text("yt-dlp:", weight=ft.FontWeight.BOLD), self.ytdlp_status, self.ytdlp_btn], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                     ft.Divider(),
                     ft.Row([ft.Text("Deno引擎:", weight=ft.FontWeight.BOLD), self.deno_status, self.deno_btn], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                     ft.Divider(),
@@ -146,18 +148,30 @@ class SettingsView(ft.Column):
 
     async def check_env(self):
         # Run checks in thread
-        ff_ver, deno_ver = await asyncio.to_thread(self._get_env_status)
+        ff_ver, ffprobe_ver, ytdlp_ver, deno_ver = await asyncio.to_thread(self._get_env_status)
         
         if self.page:  # Check if page is still available before updating
-            if ff_ver:
+            if ff_ver and ffprobe_ver:
                 self.ffmpeg_status.value = f"已安装 ({ff_ver})"
                 self.ffmpeg_status.color = ft.Colors.GREEN
                 self.ffmpeg_btn.disabled = True
                 self.ffmpeg_btn.text = "已就绪"
             else:
-                self.ffmpeg_status.value = "未安装"
+                self.ffmpeg_status.value = "未安装完整"
                 self.ffmpeg_status.color = ft.Colors.RED
                 self.ffmpeg_btn.disabled = False
+
+            if ytdlp_ver:
+                self.ytdlp_status.value = f"已安装 ({ytdlp_ver})"
+                self.ytdlp_status.color = ft.Colors.GREEN
+                self.ytdlp_btn.disabled = True
+                self.ytdlp_btn.text = "已就绪"
+                self.version_text.value = f"当前内核版本: {ytdlp_ver}"
+            else:
+                self.ytdlp_status.value = "未安装"
+                self.ytdlp_status.color = ft.Colors.RED
+                self.ytdlp_btn.disabled = False
+                self.version_text.value = "当前内核版本: 未安装"
                 
             if deno_ver:
                 self.deno_status.value = f"已安装 ({deno_ver})"
@@ -173,8 +187,10 @@ class SettingsView(ft.Column):
 
     def _get_env_status(self):
         ff = self.deps.get_ffmpeg_version() if self.deps.is_ffmpeg_installed() else None
+        ffprobe = self.deps.get_ffprobe_version() if self.deps.is_ffprobe_installed() else None
+        ytdlp = self.deps.get_ytdlp_version() if self.deps.is_ytdlp_installed() else None
         deno = self.deps.get_deno_version() if self.deps.is_deno_installed() else None
-        return ff, deno
+        return ff, ffprobe, ytdlp, deno
 
     async def select_dir(self, e):
         path = await ft.FilePicker().get_directory_path()
@@ -220,29 +236,28 @@ class SettingsView(ft.Column):
         self.update()
         
         try:
-            # 1. Check version first
             latest_ver = await self.deps.get_latest_ytdlp_version()
-            current_ver = yt_dlp.version.__version__
+            current_ver = self.deps.get_ytdlp_version()
             
-            if latest_ver == current_ver:
+            if current_ver and latest_ver == current_ver:
                 self._show_snack(f"当前已是最新版本 ({current_ver})")
                 self.update_btn.disabled = False
-                self.update_btn.text = "检查更新"
+                self.update_btn.text = "更新 yt-dlp"
                 self.update()
                 return
 
-            # 2. Update if new version available
             self.update_btn.text = f"正在更新至 {latest_ver}..."
             self.update()
             
-            await self.deps.update_ytdlp()
-            self._show_snack(f"内核更新成功 ({latest_ver})，请重启应用生效")
+            await self.deps.install_ytdlp()
+            await self.check_env()
+            self._show_snack(f"内核更新成功 ({latest_ver or self.deps.get_ytdlp_version()})")
             
         except Exception as ex:
             self._show_snack(f"更新失败: {str(ex)}")
             
         self.update_btn.disabled = False
-        self.update_btn.text = "检查更新"
+        self.update_btn.text = "更新 yt-dlp"
         self.update()
 
     async def refresh_app_update_status(self):

@@ -2,12 +2,12 @@
 
 > **IMPORTANT FOR AI AGENTS:** Read this file before making changes to understand the environment constraints and past lessons learned.
 
-## 1. Environment Specifications (Last Updated: 2026-02-05)
+## 1. Environment Specifications (Last Updated: 2026-04-07)
 
 - **Python Version**: 3.12.8 (Active in `venv-new`)
 - **Key Dependencies**:
   - `flet`: **0.80.5+** (Primary UI Framework)
-  - `yt-dlp`: Latest (Core Downloader)
+  - `yt-dlp`: External runtime binary, downloaded/updated outside the packaged app
   - `briefcase`: **REMOVED** (Do not use)
   - `toga`: **REMOVED** (Do not use)
 
@@ -54,7 +54,7 @@ flet build macos \
     --project VeloGet \
     --product VeloGet \
     --org com.lucifer \
-    --exclude venv-new venv-final build dist .git .github
+    --exclude venv-new venv-final build dist .git .github src/ytdlpgui/_internal
 ```
 
 ### yt-dlp Integration
@@ -76,17 +76,17 @@ flet build macos \
 *   **UI Framework**: Pure **Flet**. No Toga, no Briefcase.
 *   **Project Structure**:
     *   `src/ytdlpgui/`: Main package.
-    *   `src/ytdlpgui/core/worker.py`: Core business logic wrapping `yt_dlp.YoutubeDL`.
-    *   `src/ytdlpgui/_internal/`: Bundled binaries (`ffmpeg`, `yt-dlp`).
+    *   `src/ytdlpgui/core/worker.py`: Core business logic wrapping the external `yt-dlp` CLI.
+    *   `src/ytdlpgui/_internal/`: Legacy compatibility directory, excluded from release builds.
 *   **Config Persistence**:
     *   Location: `~/.ytdlpgui/config.json`
     *   Binaries (downloaded): `~/.ytdlpgui/bin`
 
 ## 4. Debugging Tips
 
-*   **Simulate CLI**: If Python API fails, verify with CLI in the venv:
+*   **Simulate CLI**: If app integration fails, verify the external runtime directly:
     ```bash
-    ./venv-new/bin/yt-dlp -F "URL" --cookies-from-browser chrome
+    ~/.ytdlpgui/bin/yt-dlp -F "URL" --cookies-from-browser chrome
     ```
 *   **Logs**: `debug_print` output is visible in the console.
 

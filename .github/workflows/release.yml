@@ -79,19 +79,6 @@ jobs:
             exit 1
           fi
 
-      - name: Prepare Windows internal binaries
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path "src/ytdlpgui/_internal" | Out-Null
-          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile "ffmpeg.zip"
-          Expand-Archive -Path "ffmpeg.zip" -DestinationPath "ffmpeg_temp"
-          Get-ChildItem -Path "ffmpeg_temp" -Filter "ffmpeg.exe" -Recurse | Copy-Item -Destination "src/ytdlpgui/_internal"
-          Get-ChildItem -Path "ffmpeg_temp" -Filter "ffprobe.exe" -Recurse | Copy-Item -Destination "src/ytdlpgui/_internal"
-          Invoke-WebRequest -Uri "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" -OutFile "src/ytdlpgui/_internal/yt-dlp.exe"
-          Remove-Item -Path "ffmpeg.zip" -Force
-          Remove-Item -Path "ffmpeg_temp" -Recurse -Force
-
       - name: Detect Apple signing configuration
         if: runner.os == 'macOS'
         id: apple_signing
@@ -196,8 +183,7 @@ jobs:
             esac
           done
 
-          codesign --force --deep --options runtime --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$APP_PATH"
-          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          python tools/sign_macos_app.py --app "$APP_PATH" --identity "$APPLE_SIGNING_IDENTITY"
 
           rm -f "$APP_ZIP_PATH"
           ditto -c -k --keepParent "$APP_PATH" "$APP_ZIP_PATH"

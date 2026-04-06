@@ -15,13 +15,10 @@ def debug_print(message):
 
 def get_ytdlp_command():
     """
-    Constructs the command to run yt-dlp.
-    In a frozen (packaged) environment, or if running from source with yt-dlp installed,
-    running as a module `python -m yt_dlp` is most robust.
+    Legacy helper returning the external yt-dlp executable command.
+    The app now installs yt-dlp into the user runtime directory on first launch.
     """
-    # 1. Try to invoke via current python executable (works for venv and packaged apps)
-    # We use a list format suitable for subprocess.run/Popen(..., shell=False)
-    return [sys.executable, "-m", "yt_dlp"]
+    return ["yt-dlp"]
 
 def get_browser_profiles(browser_name):
     """

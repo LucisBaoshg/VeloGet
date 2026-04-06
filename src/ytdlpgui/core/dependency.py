@@ -1,4 +1,5 @@
 import os
+import sys
 import shutil
 import zipfile
 import tarfile
@@ -7,8 +8,12 @@ import ssl
 import stat
 from pathlib import Path
 import asyncio
+import subprocess
+import platform
 
 class DependencyManager:
+    YTDLP_BINARY_NAMES = ("yt-dlp", "yt-dlp.exe", "yt-dlp_macos")
+
     def __init__(self, config_manager):
         self.config = config_manager
         # ~/.ytdlpgui/bin
@@ -42,6 +47,38 @@ class DependencyManager:
         # 2. System path (fallback)
         return shutil.which("ffmpeg")
 
+    def get_ffprobe_path(self):
+        local_ffprobe = self.bin_dir / "ffprobe"
+        if local_ffprobe.exists() and os.access(local_ffprobe, os.X_OK):
+            return str(local_ffprobe)
+
+        local_ffprobe_exe = self.bin_dir / "ffprobe.exe"
+        if local_ffprobe_exe.exists():
+            return str(local_ffprobe_exe)
+
+        bundled_ffprobe = self.internal_bin_dir / "ffprobe"
+        if bundled_ffprobe.exists():
+            return str(bundled_ffprobe)
+
+        bundled_ffprobe_exe = self.internal_bin_dir / "ffprobe.exe"
+        if bundled_ffprobe_exe.exists():
+            return str(bundled_ffprobe_exe)
+
+        return shutil.which("ffprobe")
+
+    def get_ytdlp_path(self):
+        for name in self.YTDLP_BINARY_NAMES:
+            candidate = self.bin_dir / name
+            if candidate.exists() and os.access(candidate, os.X_OK):
+                return str(candidate)
+
+        for name in self.YTDLP_BINARY_NAMES:
+            candidate = self.internal_bin_dir / name
+            if candidate.exists():
+                return str(candidate)
+
+        return shutil.which("yt-dlp")
+
     def get_deno_path(self):
         # 1. Custom local bin
         local_deno = self.bin_dir / "deno"
@@ -59,42 +96,53 @@ class DependencyManager:
     def is_ffmpeg_installed(self):
         return self.get_ffmpeg_path() is not None
 
+    def is_ffprobe_installed(self):
+        return self.get_ffprobe_path() is not None
+
+    def is_ytdlp_installed(self):
+        return self.get_ytdlp_path() is not None
+
     def is_deno_installed(self):
         return self.get_deno_path() is not None
 
-    async def install_ffmpeg(self, progress_callback=None):
-        import sys
-        import platform
+    def get_missing_runtime_components(self):
+        missing = []
+        if not self.is_ffmpeg_installed():
+            missing.append("ffmpeg")
+        if not self.is_ffprobe_installed():
+            missing.append("ffprobe")
+        if not self.is_ytdlp_installed():
+            missing.append("yt-dlp")
+        return missing
 
+    async def install_ffmpeg(self, progress_callback=None):
         if sys.platform == 'win32':
              # Windows: Gyan.dev release essentials
              url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
-             await self._download_and_extract(url, "ffmpeg", progress_callback)
+             await self._download_and_extract_many(url, ["ffmpeg", "ffprobe"], progress_callback)
         elif sys.platform == 'darwin':
-            # macOS
-            if platform.machine() == 'arm64':
-                # Apple Silicon
-                url = "https://ffmpeg.martin-riedl.de/redirect/latest/macos/arm64/snapshot/ffmpeg.zip"
-            else:
-                # Intel Mac (AMD64)
-                url = "https://ffmpeg.martin-riedl.de/redirect/latest/macos/amd64/snapshot/ffmpeg.zip"
-            
-            await self._download_and_extract(url, "ffmpeg", progress_callback)
+            await self._download_and_extract("https://evermeet.cx/ffmpeg/getrelease/zip", "ffmpeg", progress_callback)
+            await self._download_and_extract("https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip", "ffprobe", progress_callback)
         else:
              # Linux or other - Placeholder/Error for now as we don't have a reliable static build URL handy
              # or could use johnvansickle.com for linux
              raise Exception(f"Automatic FFmpeg installation not supported for {sys.platform}. Please install FFmpeg manually.")
 
     def get_ffmpeg_version(self):
-        path = self.get_ffmpeg_path()
-        if not path: return None
+        return self._read_version_line(self.get_ffmpeg_path(), ["-version"])
+
+    def get_ffprobe_version(self):
+        return self._read_version_line(self.get_ffprobe_path(), ["-version"])
+
+    def get_ytdlp_version(self):
+        path = self.get_ytdlp_path()
+        if not path:
+            return None
         try:
-             # Just read first line of output
-             import subprocess
-             result = subprocess.run([path, "-version"], capture_output=True, text=True)
-             if result.returncode == 0:
-                 return result.stdout.splitlines()[0]
-        except:
+            result = subprocess.run([path, "--version"], capture_output=True, text=True)
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except Exception:
             return "Unknown Version"
         return "Unknown Version"
 
@@ -111,9 +159,6 @@ class DependencyManager:
         return "Unknown Version"
 
     async def install_deno(self, progress_callback=None):
-        import sys
-        import platform
-
         # Official Deno release
         if sys.platform == 'win32':
              url = "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip"
@@ -127,6 +172,22 @@ class DependencyManager:
              url = "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip"
         
         await self._download_and_extract(url, "deno", progress_callback)
+
+    async def install_ytdlp(self, progress_callback=None):
+        if sys.platform == "win32":
+            if platform.machine().lower() == "arm64":
+                url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_arm64.exe"
+                target_name = "yt-dlp.exe"
+            else:
+                url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
+                target_name = "yt-dlp.exe"
+        elif sys.platform == "darwin":
+            url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos"
+            target_name = "yt-dlp"
+        else:
+            raise Exception(f"Automatic yt-dlp installation not supported for {sys.platform}.")
+
+        await self._download_binary(url, target_name, progress_callback)
 
     def _get_user_agent(self):
         import sys
@@ -262,6 +323,104 @@ class DependencyManager:
         
         await asyncio.to_thread(extract)
 
+    async def _download_and_extract_many(self, url, binary_names, progress_callback):
+        archive_name = binary_names[0]
+        dest_zip = self.bin_dir / f"{archive_name}.zip"
+
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+
+        def download_chunked():
+            req = urllib.request.Request(url, headers={
+                'User-Agent': self._get_user_agent()
+            })
+            with urllib.request.urlopen(req, context=ctx) as response:
+                total_size = int(response.info().get('Content-Length', 0))
+                downloaded = 0
+                block_size = 8192
+
+                with open(dest_zip, 'wb') as f:
+                    while True:
+                        buffer = response.read(block_size)
+                        if not buffer:
+                            break
+                        downloaded += len(buffer)
+                        f.write(buffer)
+                        if progress_callback and total_size > 0:
+                            percent = (downloaded / total_size) * 100
+                            progress_callback(percent, f"Downloading {', '.join(binary_names)}...")
+
+        await asyncio.to_thread(download_chunked)
+
+        if progress_callback:
+            progress_callback(100, f"Extracting {', '.join(binary_names)}...")
+
+        def extract():
+            import time
+            import gc
+
+            gc.collect()
+            temp_extract_dir = self.bin_dir / f"{archive_name}_temp"
+            if temp_extract_dir.exists():
+                shutil.rmtree(temp_extract_dir)
+            temp_extract_dir.mkdir()
+
+            with zipfile.ZipFile(dest_zip, 'r') as zip_ref:
+                zip_ref.extractall(temp_extract_dir)
+
+            found = {}
+            wanted = set(binary_names) | {f"{name}.exe" for name in binary_names}
+            for root, _dirs, files in os.walk(temp_extract_dir):
+                for file_name in files:
+                    if file_name in wanted:
+                        key = file_name.removesuffix(".exe")
+                        found[key] = Path(root) / file_name
+
+            def safe_remove(path):
+                if not path.exists():
+                    return
+                for _ in range(5):
+                    try:
+                        if path.is_dir():
+                            shutil.rmtree(path)
+                        else:
+                            path.unlink()
+                        return
+                    except Exception:
+                        time.sleep(0.5)
+                        gc.collect()
+
+            missing = [name for name in binary_names if name not in found]
+            if missing:
+                safe_remove(temp_extract_dir)
+                safe_remove(dest_zip)
+                raise Exception(f"Could not find {', '.join(missing)} in downloaded archive")
+
+            for name, source_path in found.items():
+                final_name = source_path.name
+                if name == "yt-dlp" and sys.platform != "win32":
+                    final_name = "yt-dlp"
+                final_dest = self.bin_dir / final_name
+                if final_dest.exists():
+                    final_dest.unlink()
+                shutil.move(str(source_path), str(final_dest))
+                st = os.stat(final_dest)
+                os.chmod(final_dest, st.st_mode | stat.S_IEXEC)
+
+            safe_remove(temp_extract_dir)
+            safe_remove(dest_zip)
+
+        await asyncio.to_thread(extract)
+
+    async def _download_binary(self, url, binary_name, progress_callback=None):
+        dest_path = self.bin_dir / binary_name
+
+        await self._download_file(url, dest_path, progress_callback)
+
+        st = os.stat(dest_path)
+        os.chmod(dest_path, st.st_mode | stat.S_IEXEC)
+
     async def _download_file(self, url, dest_path: Path, progress_callback):
         # Generic download helper
         ctx = ssl.create_default_context()
@@ -289,6 +448,17 @@ class DependencyManager:
                             progress_callback(percent, f"Downloading...")
 
         await asyncio.to_thread(download_chunked)
+
+    def _read_version_line(self, path, args):
+        if not path:
+            return None
+        try:
+            result = subprocess.run([path, *args], capture_output=True, text=True)
+            if result.returncode == 0:
+                return result.stdout.splitlines()[0]
+        except Exception:
+            return "Unknown Version"
+        return "Unknown Version"
 
     async def update_ytdlp(self, progress_callback=None):
         """Downloads latest yt-dlp source and extracts to updates dir with mirrors support"""

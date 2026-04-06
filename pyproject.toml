@@ -1,6 +1,6 @@
 [project]
 name = "VeloGet"
-version = "1.0.7"
+version = "1.0.8"
 description = "VeloGet - 极简且强大的视频下载器"
 authors = [
     { name = "Lucifer", email = "mr.lucis@gmail.com" }
@@ -8,7 +8,6 @@ authors = [
 requires-python = ">=3.10"
 dependencies = [
     "flet>=0.80.5",
-    "yt-dlp[default]>=2025.1.0",
 ]
 
 [tool.flet]

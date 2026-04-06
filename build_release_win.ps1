@@ -35,21 +35,8 @@ if (Test-Path $BUILD_DIR) { Remove-Item -Recurse -Force $BUILD_DIR }
 if (Test-Path $DIST_DIR) { Remove-Item -Recurse -Force $DIST_DIR }
 New-Item -ItemType Directory -Force -Path $DIST_DIR | Out-Null
 
-# 3. Check/Prepare Binaries
-# Ensure ffmpeg.exe is in src/ytdlpgui/_internal
-$INTERNAL_DIR = Join-Path $PROJECT_DIR "src\ytdlpgui\_internal"
-$FFMPEG_EXE = Join-Path $INTERNAL_DIR "ffmpeg.exe"
-
-if (-not (Test-Path $FFMPEG_EXE)) {
-    Write-Warning "ffmpeg.exe not found in $INTERNAL_DIR"
-    Write-Warning "Build will proceed, but user must install FFmpeg manually or via App."
-} else {
-    Write-Host "Found bundled ffmpeg.exe" -ForegroundColor Green
-}
-
-# 4. Build
+# 3. Build
 Write-Host "Building Windows App..." -ForegroundColor Cyan
-# exclude venv and build artifacts
 flet build windows `
     --yes `
     --no-rich-output `
@@ -57,9 +44,9 @@ flet build windows `
     --product "$APP_NAME" `
     --org "com.lucifer" `
     --copyright "Copyright (c) 2026 Lucifer" `
-    --exclude venv-new venv-final build dist .git .github
+    --exclude venv-new venv-final build dist .git .github src/ytdlpgui/_internal
 
-# 5. Package (Zip)
+# 4. Package (Zip)
 $TARGET_BUILD = Join-Path $BUILD_DIR "windows"
 if (-not (Test-Path $TARGET_BUILD)) {
     Write-Warning "Expected build output directory not found: $TARGET_BUILD"

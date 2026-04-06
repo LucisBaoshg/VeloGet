@@ -5,8 +5,10 @@ from .ui_flet.views.downloader import DownloaderView
 from .ui_flet.views.analyzer import AnalyzerView
 from .ui_flet.views.splitter import SplitterView
 from .ui_flet.views.settings import SettingsView
+from .ui_flet.views.runtime_setup import RuntimeSetupView
 from .config import ConfigManager
 from .core.app_update import AppUpdateManager
+from .core.runtime_bootstrap import runtime_setup_required
 from .core.worker import YtDlpWorker
 
 class VeloGetApp:
@@ -16,6 +18,8 @@ class VeloGetApp:
         self.worker = YtDlpWorker()
         self.available_app_update = None
 
+    def runtime_setup_required(self):
+        return runtime_setup_required(self.worker.deps)
 
     async def main(self, page: ft.Page):
         self.page = page
@@ -31,23 +35,31 @@ class VeloGetApp:
 
         # Handle Drag and Drop
         page.on_file_drop = self.on_file_drop
-        
-        # Content Area
+
+        if self.runtime_setup_required():
+            self.page.add(RuntimeSetupView(self, self.mount_main_shell))
+            self.page.update()
+            await self.page.window.center()
+            return
+
+        await self.mount_main_shell()
+
+    async def mount_main_shell(self):
         from .core.utils import debug_print
+
+        self.page.controls.clear()
         debug_print("DEBUG: Initializing Views...")
-        
+
         self.downloader_view = DownloaderView(self)
         self.analyzer_view = AnalyzerView(self)
         try:
             self.splitter_view = SplitterView(self)
         except Exception as e:
             debug_print(f"CRITICAL: Failed to create SplitterView: {e}")
-            # Fallback
             self.splitter_view = ft.Text(f"Splitter View Load Error: {e}")
-            
+
         self.settings_view = SettingsView(self)
 
-        
         self.divider = ft.VerticalDivider(width=1)
         self.rail = ft.NavigationRail(
             selected_index=0,
@@ -57,39 +69,35 @@ class VeloGetApp:
             group_alignment=-0.9,
             destinations=[
                 ft.NavigationRailDestination(
-                    icon=ft.Icons.DOWNLOAD, 
-                    selected_icon=ft.Icons.DOWNLOAD, 
+                    icon=ft.Icons.DOWNLOAD,
+                    selected_icon=ft.Icons.DOWNLOAD,
                     label="视频下载"
                 ),
                 ft.NavigationRailDestination(
-                    icon=ft.Icons.ANALYTICS, 
-                    selected_icon=ft.Icons.ANALYTICS, 
+                    icon=ft.Icons.ANALYTICS,
+                    selected_icon=ft.Icons.ANALYTICS,
                     label="频道分析"
                 ),
                 ft.NavigationRailDestination(
-                    icon=ft.Icons.CUT, 
-                    selected_icon=ft.Icons.CUT, 
+                    icon=ft.Icons.CUT,
+                    selected_icon=ft.Icons.CUT,
                     label="视频切割"
                 ),
                 ft.NavigationRailDestination(
-                    icon=ft.Icons.SETTINGS, 
-                    selected_icon=ft.Icons.SETTINGS, 
+                    icon=ft.Icons.SETTINGS,
+                    selected_icon=ft.Icons.SETTINGS,
                     label="系统设置"
                 ),
             ],
             on_change=self.on_nav_change,
         )
 
-        self.divider = ft.VerticalDivider(width=1)
-        
-        # Main Content Container
         self.content_container = ft.Container(
-            content=self.downloader_view, 
-            expand=True, 
+            content=self.downloader_view,
+            expand=True,
             padding=20
         )
 
-        # Main Layout
         self.page.add(
             ft.Row(
                 [
@@ -100,7 +108,7 @@ class VeloGetApp:
                 expand=True,
             )
         )
-        
+
         self.page.update()
         await self.page.window.center()
         self.page.run_task(self.check_app_update_silently)
@@ -122,7 +130,7 @@ class VeloGetApp:
     def on_file_drop(self, e):
         # Route file drop to active view if it supports it
         # Index 2 is Splitter
-        if self.rail.selected_index == 2:
+        if hasattr(self, "rail") and self.rail.selected_index == 2:
              self.splitter_view.handle_file_drop(e)
 
     async def check_app_update_silently(self):
