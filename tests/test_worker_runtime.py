@@ -1,3 +1,4 @@
+import ast
 import asyncio
 import sys
 import unittest
@@ -74,6 +75,20 @@ class WorkerRuntimeTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "success")
         run_download.assert_called_once()
+
+    def test_worker_imports_requests_at_module_scope_for_packaged_builds(self):
+        worker_source = Path(__file__).resolve().parents[1] / "src" / "ytdlpgui" / "core" / "worker.py"
+        module = ast.parse(worker_source.read_text(encoding="utf-8"))
+
+        has_module_scope_requests_import = any(
+            isinstance(node, ast.Import) and any(alias.name == "requests" for alias in node.names)
+            for node in module.body
+        )
+
+        self.assertTrue(
+            has_module_scope_requests_import,
+            "requests must be imported at module scope so packaged builds keep the dependency",
+        )
 
 
 if __name__ == "__main__":

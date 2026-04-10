@@ -4,6 +4,8 @@ import json
 import asyncio
 from pathlib import Path
 
+import requests
+
 from ..config import ConfigManager
 from .utils import get_environ_with_js_engine, debug_print
 from .dependency import DependencyManager
@@ -379,8 +381,7 @@ class YtDlpWorker:
         Batch fetch metadata from YouTube Data API v3 videos endpoint.
         Up to 50 IDs per request.
         """
-        import requests
-        
+
         if not video_list or not api_key:
             return video_list
 
